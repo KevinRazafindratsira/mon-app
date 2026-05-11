@@ -262,7 +262,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
       <h1 id="tracking-title">En livraison</h1>
       <p>GPS des deux phones actif</p>
     </div>
-    <span class="badge badge-live" style="margin-left:auto;">
+    <span class="badge badge-live" style="margin-left:auto;" id="livreur-live-badge">
       <span class="pulse"></span>LIVE
     </span>
   </div>
@@ -310,6 +310,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
       <div class="divider"></div>
       <div id="gps-status" class="alert alert-info" style="margin:0;">⏳ En attente du GPS du client…</div>
+      <div id="connexion-status" class="alert alert-info hidden" style="margin-top:10px;"></div>
     </div>
 
     <button class="btn btn-danger" onclick="confirmerFin()">🏁 Terminer la livraison</button>
@@ -449,6 +450,19 @@ let clientListener    = null;
 let clientPosListener = null;
 let posLivreurActuel  = null;    // dernière position GPS du livreur
 let posClientActuel   = null;    // dernière position GPS du client (cache local)
+let wakeLock          = null;    // Wake Lock pour empêcher la veille écran
+let connexionListener = null;    // listener Firebase .info/connected
+let estConnecte       = true;    // état de connexion Firebase
+
+// ── Throttle & filtre ───────────────────────────────────────────
+const FILTRE_DEPLACEMENT_M = 5;       // ignorer si déplacement < 5 mètres
+const THROTTLE_LOIN_MS     = 3000;    // throttle quand loin (> 200m)
+const THROTTLE_PROCHE_MS   = 1500;    // throttle quand proche (< 200m) → plus réactif
+let dernierEnvoiLivreur    = 0;       // timestamp du dernier update livreur
+let dernierEnvoiClient     = 0;       // timestamp du dernier update client
+let dernierePosEnvoyeeLivreur = null; // dernière pos envoyée (filtre)
+let dernierePosEnvoyeeClient  = null; // dernière pos envoyée (filtre)
+let distTotaleFixee        = false;   // empêcher la race condition
 
 // ================================================================
 // NAVIGATION
@@ -540,8 +554,30 @@ function cacherErreur(id) { document.getElementById(id).classList.add('hidden');
 function nettoyerTout() {
   if (watchId)       navigator.geolocation.clearWatch(watchId);
   if (clientWatchId) navigator.geolocation.clearWatch(clientWatchId);
-  if (clientPosListener && livreurRef) { livreurRef.off('value', clientPosListener); clientPosListener = null; }
+  if (clientPosListener && livreurRef) {
+    livreurRef.child('positionClient').off('value', clientPosListener);
+    clientPosListener = null;
+  }
+  // Arrêter le monitoring de connexion
+  if (connexionListener) {
+    db.ref('.info/connected').off('value', connexionListener);
+    connexionListener = null;
+  }
+  // Libérer le Wake Lock
+  libererWakeLock();
   watchId = null; clientWatchId = null;
+  // Reset complet pour la prochaine livraison
+  distTotale = 0;
+  distTotaleFixee = false;
+  posLivreurActuel = null;
+  posClientActuel = null;
+  livreurRef = null;
+  codeActuel = null;
+  dernierEnvoiLivreur = 0;
+  dernierEnvoiClient = 0;
+  dernierePosEnvoyeeLivreur = null;
+  dernierePosEnvoyeeClient = null;
+  estConnecte = true;
 }
 
 // ================================================================
@@ -559,7 +595,7 @@ function demarrerLivraison() {
   btn.innerHTML = '📡 Activation GPS…'; btn.disabled = true;
 
   // Reset distance pour chaque nouvelle livraison
-  distTotale = 0; posLivreurActuel = null;
+  distTotale = 0; distTotaleFixee = false; posLivreurActuel = null; posClientActuel = null;
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
@@ -597,61 +633,107 @@ function demarrerLivraison() {
 function demarrerGPS() {
   setGPSStatus('info', '⏳ En attente que le client entre le code…');
 
-  // ── Listener TEMPS RÉEL : dès que le client envoie sa position ──
-  clientPosListener = livreurRef.on('value', snap => {
-    const d = snap.val();
-    if (!d || !d.positionClient) return;
-    // Fixer distTotale une seule fois
-    if (distTotale === 0 && posLivreurActuel) {
+  // ── Wake Lock : empêcher l'écran de s'éteindre pendant la livraison ──
+  activerWakeLock();
+
+  // ── Monitoring connexion Firebase ──
+  demarrerMonitorConnexion();
+
+  // ── Listener CIBLÉ : écouter UNIQUEMENT positionClient (pas tout le doc) ──
+  clientPosListener = livreurRef.child('positionClient').on('value', snap => {
+    const pos = snap.val();
+    if (!pos) return;
+
+    // ✅ Cache local mis à jour instantanément
+    posClientActuel = pos;
+
+    // Fixer distTotale UNE SEULE FOIS
+    if (!distTotaleFixee && posLivreurActuel) {
+      distTotaleFixee = true;
       distTotale = haversine(
         posLivreurActuel.lat, posLivreurActuel.lng,
-        d.positionClient.lat, d.positionClient.lng
+        posClientActuel.lat, posClientActuel.lng
       );
       livreurRef.update({ distanceTotale: distTotale });
       document.getElementById('livreur-dist-init').textContent = distTotale.toFixed(2) + ' km';
       setGPSStatus('success', '✅ Client connecté — GPS des deux phones actif !');
     }
+
+    // ✅ Recalculer et mettre à jour l'UI immédiatement quand le client bouge
+    if (posLivreurActuel && distTotaleFixee) {
+      majUILivreurLocale();
+    }
   });
 
-  // ── GPS livreur en continu ────────────────────────────────────
+  // ── GPS livreur en continu (avec filtre + throttle adaptatif) ──
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
       posLivreurActuel = { lat, lng };
 
-      livreurRef.once('value').then(snap => {
-        const d = snap.val();
-        if (!d || !d.positionClient) {
-          livreurRef.update({ position: { lat, lng }, timestamp: Date.now() });
-          return;
-        }
+      // ✅ Mise à jour UI LOCALE instantanée (zéro latence, pas de réseau)
+      if (posClientActuel && distTotaleFixee) {
+        majUILivreurLocale();
+      }
 
-        const posClient = d.positionClient;
+      // ✅ Filtre de déplacement : ignorer si < 5m de mouvement
+      if (dernierePosEnvoyeeLivreur) {
+        const deplacementM = haversine(lat, lng, dernierePosEnvoyeeLivreur.lat, dernierePosEnvoyeeLivreur.lng) * 1000;
+        if (deplacementM < FILTRE_DEPLACEMENT_M) return;
+      }
 
-        if (distTotale === 0) {
-          distTotale = haversine(lat, lng, posClient.lat, posClient.lng);
-          livreurRef.update({ distanceTotale: distTotale });
-          document.getElementById('livreur-dist-init').textContent = distTotale.toFixed(2) + ' km';
-        }
+      // ✅ Throttle ADAPTATIF : plus rapide quand proche du client
+      const maintenant = Date.now();
+      const distActuelleKm = posClientActuel ? haversine(lat, lng, posClientActuel.lat, posClientActuel.lng) : 999;
+      const throttleActuel = distActuelleKm < 0.2 ? THROTTLE_PROCHE_MS : THROTTLE_LOIN_MS;
+      if (maintenant - dernierEnvoiLivreur < throttleActuel) return;
 
-        // Calcul distance actuelle
-        let distActuelle = Math.max(0, haversine(lat, lng, posClient.lat, posClient.lng));
-        const pct = calculerProximite(distActuelle, distTotale);
+      // Si le client n'a pas encore envoyé sa position
+      if (!posClientActuel) {
+        livreurRef.update({ position: { lat, lng }, timestamp: maintenant });
+        dernierEnvoiLivreur = maintenant;
+        dernierePosEnvoyeeLivreur = { lat, lng };
+        return;
+      }
 
-        livreurRef.update({ position: { lat, lng }, progression: pct, distReste: distActuelle.toFixed(2), timestamp: Date.now() });
+      // Fixer distTotale si pas encore fait
+      if (!distTotaleFixee) {
+        distTotaleFixee = true;
+        distTotale = haversine(lat, lng, posClientActuel.lat, posClientActuel.lng);
+        livreurRef.update({ distanceTotale: distTotale });
+        document.getElementById('livreur-dist-init').textContent = distTotale.toFixed(2) + ' km';
+      }
 
-        // Affichage en mètres si < 1km
-        let distanceAffichage = distActuelle < 1 ? (distActuelle * 1000).toFixed(0) + ' m' : distActuelle.toFixed(2) + ' km';
-        document.getElementById('livreur-pct').textContent  = pct + '%';
-        document.getElementById('livreur-fill').style.width = Math.max(2, pct) + '%';
-        document.getElementById('livreur-dist').textContent = distanceAffichage;
-        setGPSStatus('success', '✅ GPS à jour · ' + new Date().toLocaleTimeString());
-      });
+      // Calcul distance + écriture Firebase throttlée
+      let distActuelle = Math.max(0, haversine(lat, lng, posClientActuel.lat, posClientActuel.lng));
+      const pct = calculerProximite(distActuelle, distTotale);
+
+      livreurRef.update({ position: { lat, lng }, progression: pct, distReste: distActuelle.toFixed(2), timestamp: maintenant });
+      dernierEnvoiLivreur = maintenant;
+      dernierePosEnvoyeeLivreur = { lat, lng };
     },
     () => { setGPSStatus('warning', '⚠️ Signal GPS faible…'); },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
   );
+}
+
+// ✅ NOUVELLE : Mise à jour UI livreur INSTANTANÉE (0ms de latence, 100% locale)
+function majUILivreurLocale() {
+  if (!posLivreurActuel || !posClientActuel) return;
+  const distActuelle = Math.max(0, haversine(
+    posLivreurActuel.lat, posLivreurActuel.lng,
+    posClientActuel.lat, posClientActuel.lng
+  ));
+  const pct = calculerProximite(distActuelle, distTotale);
+  const distanceAffichage = distActuelle < 1
+    ? (distActuelle * 1000).toFixed(0) + ' m'
+    : distActuelle.toFixed(2) + ' km';
+
+  document.getElementById('livreur-pct').textContent  = pct + '%';
+  document.getElementById('livreur-fill').style.width = Math.max(2, pct) + '%';
+  document.getElementById('livreur-dist').textContent = distanceAffichage;
+  setGPSStatus('success', '✅ GPS à jour · ' + new Date().toLocaleTimeString());
 }
 
 function setGPSStatus(type, msg) {
@@ -660,10 +742,55 @@ function setGPSStatus(type, msg) {
   el.textContent = msg;
 }
 
+// ================================================================
+// WAKE LOCK — Empêcher l'écran de s'éteindre pendant la livraison
+// ================================================================
+async function activerWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('🔒 Wake Lock activé — écran restera allumé');
+      // Réactiver si la page redevient visible (après alt-tab)
+      document.addEventListener('visibilitychange', async () => {
+        if (wakeLock !== null && document.visibilityState === 'visible') {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      });
+    }
+  } catch (e) { console.log('Wake Lock non disponible:', e.message); }
+}
+
+function libererWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; console.log('🔓 Wake Lock libéré'); }
+}
+
+// ================================================================
+// CONNEXION MONITOR — Détecter perte de réseau Firebase
+// ================================================================
+function demarrerMonitorConnexion() {
+  const statusEl = document.getElementById('connexion-status');
+  connexionListener = db.ref('.info/connected').on('value', snap => {
+    estConnecte = snap.val() === true;
+    if (estConnecte) {
+      statusEl.classList.add('hidden');
+      const badge = document.getElementById('livreur-live-badge');
+      if (badge) { badge.className = 'badge badge-live'; badge.innerHTML = '<span class="pulse"></span>LIVE'; }
+    } else {
+      statusEl.className = 'alert alert-warning';
+      statusEl.textContent = '📡 Connexion perdue — les données seront envoyées à la reconnexion';
+      statusEl.classList.remove('hidden');
+      const badge = document.getElementById('livreur-live-badge');
+      if (badge) { badge.className = 'badge'; badge.style.background = '#FEF3C7'; badge.style.color = '#92400E'; badge.innerHTML = '⚠️ HORS LIGNE'; }
+    }
+  });
+}
+
 function confirmerFin() {
   if (!confirm('Confirmer la fin de la livraison ?')) return;
+  // Sauvegarder la ref AVANT le nettoyage (qui remet livreurRef à null)
+  const ref = livreurRef;
   nettoyerTout();
-  if (livreurRef) livreurRef.update({ statut: 'livre', progression: 100 });
+  if (ref) ref.update({ statut: 'livre', progression: 100 });
   showPage('page-home');
 }
 
@@ -679,6 +806,13 @@ function rejoindreLivraison() {
     .then(snapshot => {
       if (!snapshot.exists()) { afficherErreur('client-error', '❌ Code introuvable.'); return; }
       const data = snapshot.val();
+
+      // ✅ Vérifier que la livraison n'est pas déjà terminée
+      if (data.statut === 'livre') {
+        afficherErreur('client-error', '✅ Cette livraison est déjà terminée.');
+        return;
+      }
+
       codeActuel = code;
 
       document.getElementById('client-avatar').textContent      = initiales(data.livreur);
@@ -706,7 +840,22 @@ function activerGPSClient(code) {
 
   clientWatchId = navigator.geolocation.watchPosition(
     (pos) => {
-      db.ref('livraisons/' + code).update({ positionClient: { lat: pos.coords.latitude, lng: pos.coords.longitude } });
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+
+      // ✅ Filtre de déplacement : ignorer si < 5m
+      if (dernierePosEnvoyeeClient) {
+        const deplacementM = haversine(lat, lng, dernierePosEnvoyeeClient.lat, dernierePosEnvoyeeClient.lng) * 1000;
+        if (deplacementM < FILTRE_DEPLACEMENT_M) return;
+      }
+
+      // ✅ Throttle : max 1 écriture / 3 secondes
+      const maintenant = Date.now();
+      if (maintenant - dernierEnvoiClient < THROTTLE_LOIN_MS) return;
+
+      db.ref('livraisons/' + code).update({ positionClient: { lat, lng } });
+      dernierEnvoiClient = maintenant;
+      dernierePosEnvoyeeClient = { lat, lng };
       statusEl.className   = 'alert alert-success';
       statusEl.textContent = '✅ Votre GPS partagé · ' + new Date().toLocaleTimeString();
     },
@@ -714,7 +863,7 @@ function activerGPSClient(code) {
       statusEl.className   = 'alert alert-warning';
       statusEl.textContent = '⚠️ GPS refusé — suivi moins précis.';
     },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
   );
 }
 
