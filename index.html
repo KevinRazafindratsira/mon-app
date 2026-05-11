@@ -911,12 +911,13 @@ if (CONFIGURED) {
 }
 
 // ── Variables globales ─────────────────────────────────────────
-let watchId        = null;   // GPS watchPosition ID
-let codeActuel     = null;   // Code livraison
-let posDepart      = null;   // {lat, lng} départ livreur
-let distTotale     = 0;      // Distance totale km
-let livreurRef     = null;   // Référence Firebase livraison
-let clientListener = null;   // Listener temps réel client
+let watchId           = null;   // GPS watchPosition ID
+let codeActuel        = null;   // Code livraison
+let posDepart         = null;   // {lat, lng} départ livreur
+let distTotale        = 0;      // Distance totale km
+let livreurRef        = null;   // Référence Firebase livraison
+let clientListener    = null;   // Listener temps réel client
+let clientPosListener = null;   // Listener temps réel position client (Mode 2)
 
 // ================================================================
 // NAVIGATION
@@ -1131,7 +1132,7 @@ function demarrerDepuisGPS(btn, nom, client, adresse, destination) {
       // Mode 1 : distance vers adresse fixe. Mode 2 : 0 au départ (client pas encore connecté)
       distTotale = (modeActuel === 1 && destination)
                      ? haversine(posDepart.lat, posDepart.lng, destination.lat, destination.lng)
-                     : 0;
+                     : 0;  // toujours reset à 0 en Mode 2
       codeActuel = genererCode();
 
       const data = {
@@ -1195,35 +1196,56 @@ function choisirMode(n) {
 // ================================================================
 // LIVREUR — Étape 2 : GPS en continu (watchPosition)
 // ================================================================
-// destObj = { lat, lng } destination (Mode 1 = adresse, Mode 2 = position client live)
+// destObj = { lat, lng } destination (Mode 1 = adresse, Mode 2 = null au départ)
 function demarrerGPS(destObj) {
   setGPSStatus('info', '📡 GPS actif — position partagée en temps réel');
 
-  // En Mode 2 : destObj est null au départ, on lit la position client depuis Firebase
-  let posClientActuel = destObj; // null si mode 2 au départ
+  // posLivreurActuel : mis à jour par watchPosition
+  let posLivreurActuel = null;
+  // posClientActuel : mis à jour par le listener Firebase (Mode 2) ou fixe (Mode 1)
+  let posClientActuel  = destObj; // null si mode 2
 
+  // ── MODE 2 : écoute TEMPS RÉEL de la position client dans Firebase ──────
+  if (modeActuel === 2) {
+    // Nettoyer un éventuel ancien listener
+    if (clientPosListener && livreurRef) {
+      livreurRef.off('value', clientPosListener);
+    }
+
+    clientPosListener = livreurRef.on('value', snap => {
+      const d = snap.val();
+      if (!d) return;
+
+      // Mettre à jour la position client dès qu'elle arrive
+      if (d.positionClient) {
+        posClientActuel = d.positionClient;
+
+        // Fixer distTotale UNE SEULE FOIS quand les deux positions sont connues
+        if ((!distTotale || distTotale === 0) && posLivreurActuel) {
+          distTotale = haversine(
+            posLivreurActuel.lat, posLivreurActuel.lng,
+            posClientActuel.lat,  posClientActuel.lng
+          );
+          livreurRef.update({ distanceTotale: distTotale });
+        }
+      }
+    });
+  }
+
+  // ── GPS LIVREUR en continu ───────────────────────────────────────────────
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
+      posLivreurActuel = { lat, lng };
 
-      // Mode 2 : lire la position client depuis Firebase en temps réel
-      if (modeActuel === 2) {
-        livreurRef.once('value').then(snap => {
-          const d = snap.val();
-          if (d && d.positionClient) {
-            posClientActuel = d.positionClient;
-            // Recalculer distTotale si c'est la première fois
-            if (!distTotale || distTotale === 0) {
-              distTotale = haversine(lat, lng, posClientActuel.lat, posClientActuel.lng);
-              livreurRef.update({ distanceTotale: distTotale });
-            }
-          }
-          calculerEtEnvoyer(lat, lng, posClientActuel);
-        });
-      } else {
-        calculerEtEnvoyer(lat, lng, posClientActuel);
+      // Si Mode 2 et distance initiale pas encore définie mais les deux positions sont là
+      if (modeActuel === 2 && posClientActuel && (!distTotale || distTotale === 0)) {
+        distTotale = haversine(lat, lng, posClientActuel.lat, posClientActuel.lng);
+        livreurRef.update({ distanceTotale: distTotale });
       }
+
+      calculerEtEnvoyer(lat, lng, posClientActuel);
     },
     () => { setGPSStatus('warning', '⚠️ Signal GPS faible, nouvelle tentative…'); },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
@@ -1271,9 +1293,13 @@ function setGPSStatus(type, msg) {
 
 function confirmerFin() {
   if (!confirm('Confirmer la fin de la livraison ?')) return;
-  if (watchId)       navigator.geolocation.clearWatch(watchId);
-  if (clientWatchId) navigator.geolocation.clearWatch(clientWatchId);
-  if (livreurRef)    livreurRef.update({ statut: 'livre', progression: 100 });
+  if (watchId)             navigator.geolocation.clearWatch(watchId);
+  if (clientWatchId)       navigator.geolocation.clearWatch(clientWatchId);
+  if (clientPosListener && livreurRef) {
+    livreurRef.off('value', clientPosListener);
+    clientPosListener = null;
+  }
+  if (livreurRef)          livreurRef.update({ statut: 'livre', progression: 100 });
   showPage('page-home');
 }
 
