@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MaLivraison MG 🛵</title>
+<title>MaLivraison MG 📡 Mode GPS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -14,7 +14,6 @@
   --green-dark:  #0D7A4F;
   --green-light: #EDFAF3;
   --green-mid:   #C6F0DC;
-  --amber:       #F59E0B;
   --amber-light: #FEF3C7;
   --red:         #EF4444;
   --red-light:   #FEE2E2;
@@ -32,473 +31,137 @@
   --shadow:      0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
 }
 
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
-/* ── PAGES ── */
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; max-width: 480px; margin: 0 auto; }
 .page { display: none; flex-direction: column; min-height: 100vh; }
 .page.active { display: flex; }
 
-/* ── HEADER ── */
-.header {
-  background: var(--surface);
-  padding: 18px 20px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-.back-btn {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; cursor: pointer;
-  flex-shrink: 0;
-}
+.header { background: var(--surface); padding: 18px 20px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 10; }
+.back-btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; flex-shrink: 0; }
 .back-btn:active { background: var(--border); }
 .header-text h1 { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; }
 .header-text p  { font-size: 12px; color: var(--text-2); margin-top: 1px; }
-.header-logo {
-  width: 38px; height: 38px;
-  background: var(--green);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
-}
+.header-logo { width: 38px; height: 38px; background: var(--blue); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
 
-/* ── CONTENT ── */
 .content { padding: 20px 16px; flex: 1; }
+.card { background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 20px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-3); margin-bottom: 14px; }
 
-/* ── CARD ── */
-.card {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  padding: 20px;
-  margin-bottom: 14px;
-  box-shadow: var(--shadow);
-}
-.card-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-3);
-  margin-bottom: 14px;
-}
-
-/* ── HOME ROLE BUTTONS ── */
-.hero {
-  background: var(--green);
-  border-radius: var(--radius-lg);
-  padding: 28px 20px;
-  margin-bottom: 14px;
-  color: white;
-  position: relative;
-  overflow: hidden;
-}
-.hero::before {
-  content: '';
-  position: absolute;
-  top: -30px; right: -30px;
-  width: 120px; height: 120px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 50%;
-}
-.hero::after {
-  content: '';
-  position: absolute;
-  bottom: -40px; right: 20px;
-  width: 160px; height: 160px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 50%;
-}
+.hero { background: linear-gradient(135deg, #1E40AF, var(--blue)); border-radius: var(--radius-lg); padding: 28px 20px; margin-bottom: 14px; color: white; position: relative; overflow: hidden; }
+.hero::before { content: ''; position: absolute; top: -30px; right: -30px; width: 120px; height: 120px; background: rgba(255,255,255,0.08); border-radius: 50%; }
 .hero-emoji { font-size: 36px; margin-bottom: 10px; display: block; }
 .hero h2 { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; line-height: 1.2; }
 .hero p { font-size: 13px; opacity: 0.8; margin-top: 6px; }
 
-.role-btn {
-  width: 100%;
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 18px 16px;
-  display: flex; align-items: center; gap: 16px;
-  cursor: pointer;
-  margin-bottom: 10px;
-  transition: border-color 0.18s, background 0.18s, transform 0.1s;
-  text-align: left;
-  box-shadow: var(--shadow);
-}
+.role-btn { width: 100%; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 18px 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; margin-bottom: 10px; transition: border-color 0.18s, background 0.18s, transform 0.1s; text-align: left; box-shadow: var(--shadow); }
 .role-btn:active { transform: scale(0.98); }
-.role-btn:hover { border-color: var(--green); background: var(--green-light); }
+.role-btn:hover  { border-color: var(--green); background: var(--green-light); }
 .role-btn.blue:hover { border-color: var(--blue); background: var(--blue-light); }
-.role-icon-wrap {
-  width: 48px; height: 48px;
-  border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px;
-  flex-shrink: 0;
-}
+.role-icon-wrap { width: 48px; height: 48px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
 .bg-green { background: var(--green-light); }
 .bg-blue  { background: var(--blue-light); }
 .role-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; }
 .role-sub   { font-size: 12px; color: var(--text-2); margin-top: 3px; }
 .role-arrow { margin-left: auto; font-size: 18px; color: var(--text-3); }
 
-/* ── FORM ── */
 .form-group { margin-bottom: 14px; }
 .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
-.form-input {
-  width: 100%;
-  padding: 13px 14px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 15px;
-  outline: none;
-  background: var(--bg);
-  color: var(--text);
-  transition: border-color 0.18s, background 0.18s;
-}
+.form-input { width: 100%; padding: 13px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; outline: none; background: var(--bg); color: var(--text); transition: border-color 0.18s, background 0.18s; }
 .form-input:focus { border-color: var(--green); background: var(--surface); }
 .form-input::placeholder { color: var(--text-3); }
-.form-input.code-input {
-  font-size: 28px;
-  text-align: center;
-  letter-spacing: 10px;
-  font-family: 'Syne', sans-serif;
-  font-weight: 700;
-}
+.form-input.code-input { font-size: 28px; text-align: center; letter-spacing: 10px; font-family: 'Syne', sans-serif; font-weight: 700; }
 
-/* ── BUTTONS ── */
-.btn {
-  width: 100%;
-  padding: 15px;
-  border-radius: var(--radius-md);
-  border: none;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.18s, transform 0.1s;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-}
-.btn:active { transform: scale(0.98); }
+.btn { width: 100%; padding: 15px; border-radius: var(--radius-md); border: none; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.18s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn:active    { transform: scale(0.98); }
 .btn-primary   { background: var(--green); color: white; }
 .btn-primary:hover { background: var(--green-dark); }
 .btn-secondary { background: var(--bg); color: var(--text-2); border: 1px solid var(--border); margin-top: 10px; }
 .btn-danger    { background: var(--red-light); color: var(--red); border: 1px solid #FECACA; margin-top: 10px; }
-.btn-blue      { background: var(--blue); color: white; }
 .btn:disabled  { opacity: 0.5; cursor: not-allowed; }
 
-/* ── CODE BOX ── */
-.code-box {
-  background: linear-gradient(135deg, var(--green-dark), var(--green));
-  border-radius: var(--radius-lg);
-  padding: 24px 20px;
-  text-align: center;
-  margin-bottom: 14px;
-  color: white;
-  position: relative;
-  overflow: hidden;
-}
-.code-box::before {
-  content: '';
-  position: absolute;
-  top: -20px; left: -20px;
-  width: 100px; height: 100px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 50%;
-}
-.code-tag {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  opacity: 0.75;
-  margin-bottom: 10px;
-}
-.code-value {
-  font-family: 'Syne', sans-serif;
-  font-size: 44px;
-  font-weight: 800;
-  letter-spacing: 10px;
-  margin-bottom: 6px;
-}
+.code-box { background: linear-gradient(135deg, #1E40AF, var(--blue)); border-radius: var(--radius-lg); padding: 24px 20px; text-align: center; margin-bottom: 14px; color: white; position: relative; overflow: hidden; }
+.code-box::before { content: ''; position: absolute; top: -20px; left: -20px; width: 100px; height: 100px; background: rgba(255,255,255,0.08); border-radius: 50%; }
+.code-tag { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.75; margin-bottom: 10px; }
+.code-value { font-family: 'Syne', sans-serif; font-size: 44px; font-weight: 800; letter-spacing: 10px; margin-bottom: 6px; }
 .code-hint { font-size: 12px; opacity: 0.7; }
 
-/* ── PROGRESS BAR ── */
-.progress-wrap { margin: 4px 0 16px; }
-.progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 10px;
-}
+.progress-bg { height: 16px; background: var(--green-light); border-radius: 20px; position: relative; overflow: visible; margin-bottom: 8px; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--green), #22C55E); border-radius: 20px; transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; min-width: 16px; }
+.progress-rider { position: absolute; right: -12px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; background: var(--surface); border: 3px solid var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: 0 2px 8px rgba(22,163,105,0.3); }
+.progress-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .progress-label-txt { font-size: 13px; color: var(--text-2); }
-.progress-pct {
-  font-family: 'Syne', sans-serif;
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--green-dark);
-}
-.progress-bg {
-  height: 16px;
-  background: var(--green-light);
-  border-radius: 20px;
-  position: relative;
-  overflow: visible;
-}
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--green), #22C55E);
-  border-radius: 20px;
-  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  min-width: 16px;
-}
-.progress-rider {
-  position: absolute;
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px; height: 28px;
-  background: var(--surface);
-  border: 3px solid var(--green);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px;
-  box-shadow: 0 2px 8px rgba(22,163,105,0.3);
-}
-.progress-milestones {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
-}
+.progress-pct { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--green-dark); }
+.progress-milestones { display: flex; justify-content: space-between; margin-bottom: 16px; }
 .milestone-txt { font-size: 10px; color: var(--text-3); }
 
-/* ── STEPS ── */
-.steps-wrap {
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-  position: relative;
-}
-.step-item { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
-.step-connector {
-  position: absolute;
-  top: 14px;
-  left: calc(50% + 14px);
-  right: calc(-50% + 14px);
-  height: 2px;
-  background: var(--border);
-  z-index: 0;
-}
-.step-connector.done { background: var(--green); }
-.step-circle {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 2px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px;
-  position: relative;
-  z-index: 1;
-  margin-bottom: 5px;
-  transition: all 0.3s;
-}
-.step-item.done  .step-circle { background: var(--green); border-color: var(--green); color: white; }
-.step-item.active .step-circle { background: var(--surface); border-color: var(--green); border-width: 2.5px; color: var(--green); font-size: 14px; }
-.step-txt { font-size: 9px; color: var(--text-3); text-align: center; font-weight: 500; }
-.step-item.done  .step-txt  { color: var(--green-dark); }
-.step-item.active .step-txt { color: var(--green); font-weight: 600; }
-
-/* ── STATS GRID ── */
 .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
-.stat-card {
-  background: var(--bg);
-  border-radius: var(--radius-sm);
-  padding: 14px 12px;
-  text-align: center;
-}
-.stat-value {
-  font-family: 'Syne', sans-serif;
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--text);
-}
+.stat-card { background: var(--bg); border-radius: var(--radius-sm); padding: 14px 12px; text-align: center; }
+.stat-value { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--text); }
 .stat-label { font-size: 11px; color: var(--text-3); margin-top: 3px; }
 
-/* ── BADGES ── */
-.badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 11px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-}
-.badge-live    { background: var(--green-light); color: var(--green-dark); }
-.badge-waiting { background: var(--amber-light); color: #92400E; }
-.badge-done    { background: var(--green-mid); color: var(--green-dark); }
-.pulse {
-  width: 7px; height: 7px;
-  background: var(--green);
-  border-radius: 50%;
-  animation: pulse 1.8s infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.4; transform: scale(0.8); }
-}
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-live { background: var(--blue-light); color: #1E40AF; }
+.badge-done { background: var(--green-mid);  color: var(--green-dark); }
+.pulse { width: 7px; height: 7px; background: var(--blue); border-radius: 50%; animation: pulse 1.8s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
 
-/* ── ALERT ── */
-.alert {
-  padding: 12px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  margin-bottom: 14px;
-  line-height: 1.5;
-}
-.alert-error   { background: var(--red-light);  color: #991B1B; border: 1px solid #FECACA; }
-.alert-info    { background: var(--blue-light);  color: #1E40AF; border: 1px solid #BFDBFE; }
-.alert-success { background: var(--green-light); color: var(--green-dark); border: 1px solid var(--green-mid); }
-.alert-warning { background: var(--amber-light); color: #92400E; border: 1px solid #FDE68A; }
+.alert { padding: 12px 14px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
+.alert-error   { background: var(--red-light);   color: #991B1B;         border: 1px solid #FECACA; }
+.alert-info    { background: var(--blue-light);   color: #1E40AF;         border: 1px solid #BFDBFE; }
+.alert-success { background: var(--green-light);  color: var(--green-dark); border: 1px solid var(--green-mid); }
+.alert-warning { background: var(--amber-light);  color: #92400E;         border: 1px solid #FDE68A; }
 
-/* ── LIVREUR INFO ── */
-.livreur-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.avatar {
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  background: var(--blue-light);
-  color: var(--blue);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Syne', sans-serif;
-  font-size: 15px;
-  font-weight: 800;
-  flex-shrink: 0;
-}
+.steps-wrap { display: flex; align-items: center; margin-bottom: 20px; position: relative; }
+.step-item { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+.step-connector { position: absolute; top: 14px; left: calc(50% + 14px); right: calc(-50% + 14px); height: 2px; background: var(--border); z-index: 0; }
+.step-connector.done { background: var(--green); }
+.step-circle { width: 28px; height: 28px; border-radius: 50%; background: var(--bg); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 11px; position: relative; z-index: 1; margin-bottom: 5px; transition: all 0.3s; }
+.step-item.done   .step-circle { background: var(--green); border-color: var(--green); color: white; }
+.step-item.active .step-circle { background: var(--surface); border-color: var(--green); border-width: 2.5px; color: var(--green); font-size: 14px; }
+.step-txt { font-size: 9px; color: var(--text-3); text-align: center; font-weight: 500; }
+.step-item.done   .step-txt { color: var(--green-dark); }
+.step-item.active .step-txt { color: var(--green); font-weight: 600; }
+
+.livreur-row { display: flex; align-items: center; gap: 14px; }
+.avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--blue-light); color: var(--blue); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; flex-shrink: 0; }
 .livreur-name { font-weight: 600; font-size: 15px; }
 .livreur-sub  { font-size: 12px; color: var(--text-2); margin-top: 2px; }
 
-/* ── GPS STATUS ── */
-#gps-status { font-size: 13px; }
-
-/* ── FINISH BANNER ── */
-.finish-banner {
-  background: var(--green);
-  color: white;
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  text-align: center;
-  margin-bottom: 14px;
-}
+.finish-banner { background: var(--green); color: white; border-radius: var(--radius-lg); padding: 20px; text-align: center; margin-bottom: 14px; }
 .finish-banner .big-emoji { font-size: 40px; display: block; margin-bottom: 10px; }
 .finish-banner h2 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; }
 .finish-banner p  { font-size: 13px; opacity: 0.85; margin-top: 6px; }
 
-/* ── CONFIG NOTICE ── */
-.config-notice {
-  background: var(--amber-light);
-  border: 1px solid #FDE68A;
-  border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 14px;
-  font-size: 13px;
-  color: #78350F;
-  line-height: 1.6;
-}
-.config-notice strong { font-weight: 700; }
-.config-notice code  {
-  background: rgba(0,0,0,0.08);
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
-}
+/* Proximité */
+.proximity-wrap { text-align: center; padding: 10px 0 20px; }
+.proximity-circles { position: relative; width: 130px; height: 130px; margin: 0 auto 14px; }
+.circle-outer { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--green-mid); animation: ripple 2s infinite; }
+.circle-inner { position: absolute; inset: 18px; border-radius: 50%; background: var(--green-light); border: 3px solid var(--green); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+@keyframes ripple { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.35); opacity: 0; } }
+.proximity-pct-big { font-family: 'Syne', sans-serif; font-size: 38px; font-weight: 800; color: var(--green-dark); }
+.proximity-label { font-size: 13px; color: var(--text-2); margin-top: 4px; }
 
+.login-box { display: flex; flex-direction: column; justify-content: center; min-height: 100vh; padding: 32px 20px; background: var(--bg); }
+.login-logo { text-align: center; margin-bottom: 32px; }
+.login-logo .big-icon { width: 72px; height: 72px; background: var(--blue); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 34px; margin: 0 auto 14px; box-shadow: 0 4px 20px rgba(59,130,246,0.3); }
+.login-logo h1 { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); }
+.login-logo p  { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+.login-card { background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 24px 20px; box-shadow: var(--shadow); }
+.user-email-badge { display: flex; align-items: center; gap: 10px; background: var(--blue-light); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: #1E40AF; font-weight: 500; }
 
-/* ── LOGIN PAGE ── */
-.login-box {
-  display: flex; flex-direction: column;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 32px 20px;
-  background: var(--bg);
-}
-.login-logo {
-  text-align: center;
-  margin-bottom: 32px;
-}
-.login-logo .big-icon {
-  width: 72px; height: 72px;
-  background: var(--green);
-  border-radius: 20px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 34px;
-  margin: 0 auto 14px;
-  box-shadow: 0 4px 20px rgba(22,163,105,0.3);
-}
-.login-logo h1 {
-  font-family: 'Syne', sans-serif;
-  font-size: 22px; font-weight: 800;
-  color: var(--text);
-}
-.login-logo p {
-  font-size: 13px; color: var(--text-2); margin-top: 4px;
-}
-.login-card {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  padding: 24px 20px;
-  box-shadow: var(--shadow);
-}
-.user-email-badge {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--green-light);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  margin-bottom: 14px;
-  font-size: 13px;
-  color: var(--green-dark);
-  font-weight: 500;
-}
-
-/* ── UTILS ── */
-.hidden   { display: none !important; }
-.row      { display: flex; align-items: center; justify-content: space-between; }
-.mt-12    { margin-top: 12px; }
-.divider  { height: 1px; background: var(--border); margin: 16px 0; }
+.hidden  { display: none !important; }
+.row     { display: flex; align-items: center; justify-content: space-between; }
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
 </style>
 </head>
 <body>
 
-<!-- ════════════════════════════════════════════
-     PAGE 0 — LOGIN LIVREUR
-════════════════════════════════════════════ -->
+<!-- PAGE 0 — LOGIN -->
 <div class="page active" id="page-login">
   <div class="login-box">
     <div class="login-logo">
-      <div class="big-icon">🛵</div>
+      <div class="big-icon">📡</div>
       <h1>MaLivraison MG</h1>
-      <p>Espace livreur — connectez-vous</p>
+      <p>Mode GPS · Les deux phones</p>
     </div>
     <div class="login-card">
       <div id="login-error" class="alert alert-error hidden"></div>
@@ -510,12 +173,7 @@ body {
         <label class="form-label">Mot de passe</label>
         <input class="form-input" id="login-mdp" type="password" placeholder="••••••••" autocomplete="current-password">
       </div>
-      <button class="btn btn-primary" id="btn-login" onclick="seConnecter()">
-        🔐 Se connecter
-      </button>
-      <div style="text-align:center;margin-top:16px;font-size:12px;color:var(--text-3);">
-        Contactez l'administrateur pour obtenir un compte.
-      </div>
+      <button class="btn btn-primary" id="btn-login" onclick="seConnecter()">🔐 Se connecter</button>
     </div>
     <div style="text-align:center;margin-top:20px;">
       <button class="role-btn blue" onclick="showPage('page-client')" style="max-width:340px;margin:0 auto;">
@@ -530,27 +188,14 @@ body {
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     PAGE 1 — ACCUEIL
-════════════════════════════════════════════ -->
-<div class="page active" id="page-home">
+<!-- PAGE 1 — ACCUEIL -->
+<div class="page" id="page-home">
   <div class="content">
-
-    <!-- Bannière héro -->
     <div class="hero">
-      <span class="hero-emoji">🛵</span>
-      <h2>MaLivraison<br>Madagascar</h2>
-      <p>Suivi de livraison en temps réel · 100% gratuit</p>
+      <span class="hero-emoji">📡</span>
+      <h2>Mode GPS<br>Les deux phones</h2>
+      <p>La barre monte quand vous vous rapprochez · 100% = arrivé ✅</p>
     </div>
-
-    <!-- Avertissement Firebase non configuré -->
-    <div id="config-warning" class="config-notice hidden">
-      <strong>⚙️ Configuration requise</strong><br>
-      Ouvrez ce fichier dans un éditeur et remplacez les valeurs Firebase.
-      Cherchez le texte <code>VOTRE_API_KEY</code> vers la fin du fichier.
-      <br><br>Voir les <strong>instructions détaillées</strong> tout en bas du fichier HTML.
-    </div>
-
     <div class="card" style="padding:8px;">
       <div id="home-user-badge" class="user-email-badge hidden">
         👤 <span id="home-user-email">—</span>
@@ -560,7 +205,7 @@ body {
         <div class="role-icon-wrap bg-green">🛵</div>
         <div>
           <div class="role-title">Je suis Livreur</div>
-          <div class="role-sub">Démarrer et partager ma position GPS</div>
+          <div class="role-sub">Démarrer · GPS activé automatiquement</div>
         </div>
         <span class="role-arrow">›</span>
       </button>
@@ -568,36 +213,28 @@ body {
         <div class="role-icon-wrap bg-blue">📦</div>
         <div>
           <div class="role-title">Je suis Client</div>
-          <div class="role-sub">Suivre ma commande avec un code</div>
+          <div class="role-sub">Entrer le code · GPS partagé automatiquement</div>
         </div>
         <span class="role-arrow">›</span>
       </button>
     </div>
-
-    <p style="text-align:center;font-size:12px;color:var(--text-3);margin-top:8px;">
-      Antananarivo, Madagascar 🇲🇬
-    </p>
-
+    <p style="text-align:center;font-size:12px;color:var(--text-3);margin-top:8px;">Antananarivo, Madagascar 🇲🇬</p>
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     PAGE 2 — LIVREUR : Créer une livraison
-════════════════════════════════════════════ -->
+<!-- PAGE 2 — LIVREUR : Setup -->
 <div class="page" id="page-livreur-setup">
   <div class="header">
     <button class="back-btn" onclick="showPage('page-home')">←</button>
     <div class="header-text">
       <h1>Nouvelle livraison</h1>
-      <p>Remplissez les informations</p>
+      <p>Mode GPS des deux phones</p>
     </div>
   </div>
   <div class="content">
-
     <div id="setup-error" class="alert alert-error hidden"></div>
-
     <div class="card">
-      <div class="card-label">Informations de livraison</div>
+      <div class="card-label">Informations</div>
       <div class="form-group">
         <label class="form-label">Votre nom (Livreur)</label>
         <input class="form-input" id="livreur-nom" type="text" placeholder="Ex : Rakoto Liva">
@@ -606,36 +243,24 @@ body {
         <label class="form-label">Nom du client</label>
         <input class="form-input" id="client-nom" type="text" placeholder="Ex : Rabe Mamy">
       </div>
-      <div class="form-group">
-        <label class="form-label">Adresse de livraison (chez le client)</label>
-        <input class="form-input" id="adresse-client" type="text" placeholder="Ex : Analakely, Antananarivo">
-        <div id="adresse-result" style="font-size:12px;margin-top:6px;color:var(--text-2);"></div>
-      </div>
     </div>
-
     <div class="alert alert-info" style="font-size:12px;">
-      📍 Votre position GPS = point de départ.<br>
-      🗺️ L'adresse du client = destination.<br>
-      La distance est calculée <strong>automatiquement</strong>.
+      📡 <strong>Pas besoin d'adresse</strong><br>
+      Le client active son GPS quand il entre le code.<br>
+      La barre monte quand vous vous <strong>rapprochez physiquement</strong>.
     </div>
-
-    <button class="btn btn-primary" id="btn-demarrer" onclick="demarrerLivraison()">
-      🚀 Démarrer la livraison
-    </button>
+    <button class="btn btn-primary" id="btn-demarrer" onclick="demarrerLivraison()">🚀 Démarrer la livraison</button>
     <button class="btn btn-secondary" onclick="showPage('page-home')">Annuler</button>
-
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     PAGE 3 — LIVREUR : Suivi actif
-════════════════════════════════════════════ -->
+<!-- PAGE 3 — LIVREUR : Tracking -->
 <div class="page" id="page-livreur-tracking">
   <div class="header">
-    <div class="header-logo">🛵</div>
+    <div class="header-logo">📡</div>
     <div class="header-text">
       <h1 id="tracking-title">En livraison</h1>
-      <p>Position GPS partagée en direct</p>
+      <p>GPS des deux phones actif</p>
     </div>
     <span class="badge badge-live" style="margin-left:auto;">
       <span class="pulse"></span>LIVE
@@ -643,59 +268,55 @@ body {
   </div>
   <div class="content">
 
-    <!-- Code à partager -->
     <div class="code-box">
       <div class="code-tag">Code à donner au client</div>
       <div class="code-value" id="code-display">- - - -</div>
-      <div class="code-hint">Le client entre ce code pour vous suivre</div>
+      <div class="code-hint">Le client entre ce code · son GPS s'active automatiquement</div>
     </div>
 
-    <!-- Progression livreur -->
     <div class="card">
-      <div class="card-label">Ma progression</div>
+      <div class="card-label">Proximité avec le client</div>
 
-      <div class="progress-wrap">
-        <div class="progress-header">
-          <span class="progress-label-txt">Distance parcourue</span>
-          <span class="progress-pct" id="livreur-pct">0%</span>
+      <div class="proximity-wrap">
+        <div class="proximity-circles">
+          <div class="circle-outer"></div>
+          <div class="circle-inner">🛵</div>
         </div>
-        <div class="progress-bg">
-          <div class="progress-fill" id="livreur-fill" style="width:2%;">
-            <div class="progress-rider">🛵</div>
-          </div>
+        <div class="proximity-pct-big" id="livreur-pct">0%</div>
+        <div class="proximity-label">de rapprochement</div>
+      </div>
+
+      <div class="progress-bg">
+        <div class="progress-fill" id="livreur-fill" style="width:2%;">
+          <div class="progress-rider">🛵</div>
         </div>
-        <div class="progress-milestones">
-          <span class="milestone-txt">Départ</span>
-          <span class="milestone-txt">Mi-chemin</span>
-          <span class="milestone-txt">Arrivée</span>
-        </div>
+      </div>
+      <div class="progress-milestones">
+        <span class="milestone-txt">Loin</span>
+        <span class="milestone-txt">Mi-chemin</span>
+        <span class="milestone-txt">Arrivé ✅</span>
       </div>
 
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-value" id="livreur-parcouru">0.0 km</div>
-          <div class="stat-label">Parcouru</div>
+          <div class="stat-value" id="livreur-dist">— km</div>
+          <div class="stat-label">Distance actuelle</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value" id="livreur-reste">— km</div>
-          <div class="stat-label">Restant</div>
+          <div class="stat-value" id="livreur-dist-init">— km</div>
+          <div class="stat-label">Distance initiale</div>
         </div>
       </div>
 
       <div class="divider"></div>
-      <div id="gps-status" class="alert alert-info" style="margin:0;">
-        📡 Recherche du signal GPS…
-      </div>
+      <div id="gps-status" class="alert alert-info" style="margin:0;">⏳ En attente du GPS du client…</div>
     </div>
 
     <button class="btn btn-danger" onclick="confirmerFin()">🏁 Terminer la livraison</button>
-
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════
-     PAGE 4 — CLIENT : Suivi
-════════════════════════════════════════════ -->
+<!-- PAGE 4 — CLIENT -->
 <div class="page" id="page-client">
   <div class="header">
     <button class="back-btn" onclick="retourAccueilClient()">←</button>
@@ -706,38 +327,23 @@ body {
   </div>
   <div class="content">
 
-    <!-- Formulaire code -->
     <div id="client-code-form" class="card">
       <div class="card-label">Code de livraison</div>
       <div class="form-group">
-        <input
-          class="form-input code-input"
-          id="client-code-input"
-          type="tel"
-          inputmode="numeric"
-          pattern="[0-9]*"
-          placeholder="000000"
-          maxlength="6"
-          oninput="this.value = this.value.replace(/[^0-9]/g,'')"
-        >
+        <input class="form-input code-input" id="client-code-input" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="000000" maxlength="6" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
       </div>
       <div id="client-error" class="alert alert-error hidden"></div>
-      <button class="btn btn-primary" onclick="rejoindreLivraison()">
-        📦 Suivre ma livraison
-      </button>
+      <button class="btn btn-primary" onclick="rejoindreLivraison()">📦 Suivre ma livraison</button>
     </div>
 
-    <!-- Vue suivi (cachée au départ) -->
     <div id="client-tracking" class="hidden">
 
-      <!-- Fin de livraison -->
       <div id="finish-banner" class="finish-banner hidden">
         <span class="big-emoji">✅</span>
         <h2>Livraison réussie !</h2>
         <p id="finish-text">Votre colis est arrivé.</p>
       </div>
 
-      <!-- Info livreur -->
       <div class="card" id="livreur-info-card">
         <div class="row">
           <div class="livreur-row">
@@ -753,53 +359,38 @@ body {
         </div>
       </div>
 
-      <!-- Étapes -->
+      <div id="client-gps-status" class="hidden"></div>
+
       <div class="card">
         <div class="steps-wrap">
-          <div class="step-item done">
-            <div class="step-circle">✓</div>
-            <div class="step-txt">Confirmé</div>
-          </div>
+          <div class="step-item done"><div class="step-circle">✓</div><div class="step-txt">Confirmé</div></div>
           <div class="step-connector done"></div>
-          <div class="step-item done">
-            <div class="step-circle">✓</div>
-            <div class="step-txt">Préparé</div>
-          </div>
+          <div class="step-item done"><div class="step-circle">✓</div><div class="step-txt">Préparé</div></div>
           <div class="step-connector" id="conn-route"></div>
-          <div class="step-item active" id="step-route">
-            <div class="step-circle">🛵</div>
-            <div class="step-txt">En route</div>
-          </div>
+          <div class="step-item active" id="step-route"><div class="step-circle">🛵</div><div class="step-txt">En route</div></div>
           <div class="step-connector" id="conn-livre"></div>
-          <div class="step-item" id="step-livre">
-            <div class="step-circle">🏠</div>
-            <div class="step-txt">Livré !</div>
-          </div>
+          <div class="step-item" id="step-livre"><div class="step-circle">🏠</div><div class="step-txt">Livré !</div></div>
         </div>
 
-        <!-- Barre de progression -->
-        <div class="progress-wrap">
-          <div class="progress-header">
-            <span class="progress-label-txt">Progression du livreur</span>
-            <span class="progress-pct" id="client-pct">0%</span>
-          </div>
-          <div class="progress-bg">
-            <div class="progress-fill" id="client-fill" style="width:2%;">
-              <div class="progress-rider">🛵</div>
-            </div>
-          </div>
-          <div class="progress-milestones">
-            <span class="milestone-txt">Départ</span>
-            <span class="milestone-txt">Mi-chemin</span>
-            <span class="milestone-txt">Chez vous</span>
+        <div class="progress-header">
+          <span class="progress-label-txt">Rapprochement</span>
+          <span class="progress-pct" id="client-pct">0%</span>
+        </div>
+        <div class="progress-bg">
+          <div class="progress-fill" id="client-fill" style="width:2%;">
+            <div class="progress-rider">🛵</div>
           </div>
         </div>
+        <div class="progress-milestones">
+          <span class="milestone-txt">Loin</span>
+          <span class="milestone-txt">Mi-chemin</span>
+          <span class="milestone-txt">Arrivé ✅</span>
+        </div>
 
-        <!-- Stats -->
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-value" id="client-dist-reste">— km</div>
-            <div class="stat-label">Distance restante</div>
+            <div class="stat-label">Distance actuelle</div>
           </div>
           <div class="stat-card">
             <div class="stat-value" id="client-eta">— min</div>
@@ -810,70 +401,53 @@ body {
 
       <button class="btn btn-secondary" onclick="quitterSuivi()">Quitter le suivi</button>
     </div>
-
   </div>
 </div>
 
-<!-- ════════════════════════════════
-     FIREBASE SDK (via Google CDN)
-════════════════════════════════ -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
 <script>
 // ================================================================
-// ⚙️  CONFIGURATION FIREBASE — REMPLACEZ CES VALEURS
-// ================================================================
-// Pour obtenir ces valeurs :
-//   1. Allez sur https://console.firebase.google.com
-//   2. Créez un projet → Realtime Database → Mode test
-//   3. Paramètres du projet → Vos applications → Application web (</>)
-//   4. Copiez l'objet firebaseConfig ici
+// ⚙️  MÊME FIREBASE que index.html
 // ================================================================
 const firebaseConfig = {
- apiKey:            "AIzaSyBKrBVP2N9QqZrl9i9yTKeO45GXCYTk9V0",
+  apiKey:            "AIzaSyBKrBVP2N9QqZrl9i9yTKeO45GXCYTk9V0",
   authDomain:        "malivraison-mg.firebaseapp.com",
   databaseURL:       "https://malivraison-mg-default-rtdb.europe-west1.firebasedatabase.app",
   projectId:         "malivraison-mg",
   storageBucket:     "malivraison-mg.firebasestorage.app",
   messagingSenderId: "97467529675",
-  appId:             "1:97467529675:web:760e7ec0489d36d0839e4e",
-  measurementId: "G-VKNH6Y281L"
+  appId:             "1:97467529675:web:760e7ec0489d36d0839e4e"
 };
-// ================================================================
 
-// ── Init Firebase ──────────────────────────────────────────────
 const CONFIGURED = !firebaseConfig.apiKey.includes("VOTRE");
 let db, auth;
 if (CONFIGURED) {
   firebase.initializeApp(firebaseConfig);
   db   = firebase.database();
   auth = firebase.auth();
-
-  // Surveiller l'état de connexion au démarrage
   auth.onAuthStateChanged(user => {
     if (user) {
-      // Livreur connecté → aller à l'accueil
       document.getElementById('home-user-email').textContent = user.email;
       document.getElementById('home-user-badge').classList.remove('hidden');
       showPage('page-home');
     } else {
-      // Non connecté → page login
       showPage('page-login');
     }
   });
-} else {
-  document.getElementById('config-warning').classList.remove('hidden');
 }
 
-// ── Variables globales ─────────────────────────────────────────
-let watchId        = null;   // GPS watchPosition ID
-let codeActuel     = null;   // Code livraison
-let posDepart      = null;   // {lat, lng} départ livreur
-let distTotale     = 0;      // Distance totale km
-let livreurRef     = null;   // Référence Firebase livraison
-let clientListener = null;   // Listener temps réel client
+// ── Variables ───────────────────────────────────────────────────
+let watchId           = null;
+let clientWatchId     = null;
+let codeActuel        = null;
+let distTotale        = 0;       // distance initiale entre les 2 phones
+let livreurRef        = null;
+let clientListener    = null;
+let clientPosListener = null;
+let posLivreurActuel  = null;    // dernière position GPS du livreur
 
 // ================================================================
 // NAVIGATION
@@ -884,394 +458,282 @@ function showPage(id) {
 }
 
 // ================================================================
-// AUTH — Connexion / Inscription / Déconnexion
+// AUTH
 // ================================================================
 function seConnecter() {
   const email = document.getElementById('login-email').value.trim();
   const mdp   = document.getElementById('login-mdp').value;
   const btn   = document.getElementById('btn-login');
-
-  if (!email || !mdp) {
-    afficherErreur('login-error', '⚠️ Entrez votre email et mot de passe');
-    return;
-  }
+  if (!email || !mdp) { afficherErreur('login-error', '⚠️ Entrez votre email et mot de passe'); return; }
   cacherErreur('login-error');
-  btn.innerHTML = '⏳ Connexion…';
-  btn.disabled  = true;
-
+  btn.innerHTML = '⏳ Connexion…'; btn.disabled = true;
   auth.signInWithEmailAndPassword(email, mdp)
     .then(cred => {
       document.getElementById('home-user-email').textContent = cred.user.email;
       document.getElementById('home-user-badge').classList.remove('hidden');
-      btn.innerHTML = '🔐 Se connecter';
-      btn.disabled  = false;
-      document.getElementById('login-email').value = '';
-      document.getElementById('login-mdp').value   = '';
+      btn.innerHTML = '🔐 Se connecter'; btn.disabled = false;
       showPage('page-home');
     })
     .catch(err => {
-      btn.innerHTML = '🔐 Se connecter';
-      btn.disabled  = false;
-      const msg = err.code === 'auth/user-not-found'    ? '❌ Email introuvable. Créez un compte.'
+      btn.innerHTML = '🔐 Se connecter'; btn.disabled = false;
+      const msg = err.code === 'auth/user-not-found'    ? '❌ Email introuvable.'
                 : err.code === 'auth/wrong-password'    ? '❌ Mot de passe incorrect.'
                 : err.code === 'auth/invalid-email'     ? '❌ Email invalide.'
-                : err.code === 'auth/too-many-requests' ? '❌ Trop de tentatives. Réessayez plus tard.'
-                : '❌ Erreur : ' + err.message;
+                : err.code === 'auth/too-many-requests' ? '❌ Trop de tentatives.'
+                : '❌ ' + err.message;
       afficherErreur('login-error', msg);
-    });
-}
-
-function sInscrire() { return; // Inscription désactivée
-  // original code below:
-  const email = document.getElementById('inscr-email').value.trim();
-  const mdp   = document.getElementById('inscr-mdp').value;
-  const mdp2  = document.getElementById('inscr-mdp2').value;
-  const btn   = document.getElementById('btn-inscr');
-
-  if (!email || !mdp) { afficherErreur('inscription-error', '⚠️ Remplissez tous les champs'); return; }
-  if (mdp.length < 6)  { afficherErreur('inscription-error', '⚠️ Mot de passe minimum 6 caractères'); return; }
-  if (mdp !== mdp2)    { afficherErreur('inscription-error', '❌ Les mots de passe ne correspondent pas'); return; }
-
-  cacherErreur('inscription-error');
-  btn.innerHTML = '⏳ Création…';
-  btn.disabled  = true;
-
-  auth.createUserWithEmailAndPassword(email, mdp)
-    .then(cred => {
-      btn.innerHTML = '✅ Créer mon compte';
-      btn.disabled  = false;
-      document.getElementById('inscr-email').value = '';
-      document.getElementById('inscr-mdp').value   = '';
-      document.getElementById('inscr-mdp2').value  = '';
-      document.getElementById('inscription-success').textContent = '✅ Compte créé ! Vous êtes connecté.';
-      document.getElementById('inscription-success').classList.remove('hidden');
-      setTimeout(() => {
-        document.getElementById('home-user-email').textContent = cred.user.email;
-        document.getElementById('home-user-badge').classList.remove('hidden');
-        showPage('page-home');
-      }, 1500);
-    })
-    .catch(err => {
-      btn.innerHTML = '✅ Créer mon compte';
-      btn.disabled  = false;
-      const msg = err.code === 'auth/email-already-in-use' ? '❌ Cet email est déjà utilisé.'
-                : err.code === 'auth/invalid-email'        ? '❌ Email invalide.'
-                : '❌ Erreur : ' + err.message;
-      afficherErreur('inscription-error', msg);
     });
 }
 
 function seDeconnecter() {
   if (!confirm('Se déconnecter ?')) return;
-  if (watchId)   navigator.geolocation.clearWatch(watchId);
-  if (livreurRef) livreurRef.update({ statut: 'livre' });
+  nettoyerTout();
   auth.signOut().then(() => showPage('page-login'));
 }
 
-// Bouton livreur → vérifie si connecté
 function allerLivreur() {
-  if (!auth || !auth.currentUser) {
-    showPage('page-login');
-  } else {
-    showPage('page-livreur-setup');
-  }
+  if (!auth || !auth.currentUser) showPage('page-login');
+  else showPage('page-livreur-setup');
 }
 
 // ================================================================
 // UTILITAIRES
 // ================================================================
-function genererCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+function genererCode() { return Math.floor(100000 + Math.random() * 900000).toString(); }
 
-// Formule Haversine — distance en km entre deux points GPS
 function haversine(lat1, lng1, lat2, lng2) {
-  const R   = 6371;
-  const dLa = (lat2 - lat1) * Math.PI / 180;
-  const dLo = (lng2 - lng1) * Math.PI / 180;
-  const a   = Math.sin(dLa/2)**2 +
-              Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
-              Math.sin(dLo/2)**2;
+  const R = 6371;
+  const dLa = (lat2-lat1)*Math.PI/180, dLo = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLa/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLo/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// 2 premières lettres majuscules du nom
-function initiales(nom) {
-  return nom.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
+function initiales(nom) { return nom.trim().split(/\s+/).map(n=>n[0]).join('').toUpperCase().slice(0,2); }
+function afficherErreur(id, msg) { const el=document.getElementById(id); el.textContent=msg; el.classList.remove('hidden'); }
+function cacherErreur(id) { document.getElementById(id).classList.add('hidden'); }
 
-function afficherErreur(id, msg) {
-  const el = document.getElementById(id);
-  el.textContent = msg;
-  el.classList.remove('hidden');
-}
-function cacherErreur(id) {
-  document.getElementById(id).classList.add('hidden');
+function nettoyerTout() {
+  if (watchId)       navigator.geolocation.clearWatch(watchId);
+  if (clientWatchId) navigator.geolocation.clearWatch(clientWatchId);
+  if (clientPosListener && livreurRef) { livreurRef.off('value', clientPosListener); clientPosListener = null; }
+  watchId = null; clientWatchId = null;
 }
 
 // ================================================================
-// GEOCODAGE — OpenStreetMap Nominatim (gratuit, sans clé API)
+// LIVREUR — Démarrer (pas d'adresse, GPS direct)
 // ================================================================
-async function geocoder(adresse) {
-  const query = encodeURIComponent(adresse + ', Madagascar');
-  const url   = 'https://nominatim.openstreetmap.org/search?q=' + query + '&format=json&limit=1&accept-language=fr';
-  const res   = await fetch(url, { headers: { 'User-Agent': 'MaLivraisonMG/1.0' } });
-  const data  = await res.json();
-  if (!data || data.length === 0) throw new Error('Adresse introuvable');
-  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), nom: data[0].display_name };
-}
-
-// ================================================================
-// LIVREUR — Étape 1 : Créer la livraison
-// ================================================================
-async function demarrerLivraison() {
-  if (!CONFIGURED) {
-    afficherErreur('setup-error', "⚠️ Firebase non configuré. Voir les instructions en bas du fichier HTML.");
-    return;
-  }
-
-  const nom     = document.getElementById('livreur-nom').value.trim();
-  const client  = document.getElementById('client-nom').value.trim();
-  const adresse = document.getElementById('adresse-client').value.trim();
-
-  if (!nom)     { afficherErreur('setup-error', '👤 Entrez votre nom'); return; }
-  if (!client)  { afficherErreur('setup-error', '📦 Entrez le nom du client'); return; }
-  if (!adresse) { afficherErreur('setup-error', "📍 Entrez l'adresse de livraison"); return; }
-
+function demarrerLivraison() {
+  const nom    = document.getElementById('livreur-nom').value.trim();
+  const client = document.getElementById('client-nom').value.trim();
+  if (!nom)    { afficherErreur('setup-error', '👤 Entrez votre nom'); return; }
+  if (!client) { afficherErreur('setup-error', '📦 Entrez le nom du client'); return; }
+  if (!navigator.geolocation) { afficherErreur('setup-error', '❌ GPS non disponible.'); return; }
   cacherErreur('setup-error');
 
-  if (!navigator.geolocation) {
-    afficherErreur('setup-error', '❌ GPS non disponible sur cet appareil.');
-    return;
-  }
-
   const btn = document.getElementById('btn-demarrer');
+  btn.innerHTML = '📡 Activation GPS…'; btn.disabled = true;
 
-  // ÉTAPE 1 — Chercher les coordonnées de l'adresse du client (OpenStreetMap)
-  btn.innerHTML = '🗺️ Recherche adresse…';
-  btn.disabled  = true;
-
-  let destination;
-  try {
-    destination = await geocoder(adresse);
-    const nomCourt = destination.nom.split(',').slice(0, 3).join(',');
-    document.getElementById('adresse-result').innerHTML =
-      '<span style="color:var(--green-dark)">✅ ' + nomCourt + '</span>';
-  } catch(e) {
-    btn.innerHTML = '🚀 Démarrer la livraison';
-    btn.disabled  = false;
-    afficherErreur('setup-error',
-      '❌ Adresse introuvable. Essayez ex: "Analakely, Antananarivo"');
-    return;
-  }
-
-  // ÉTAPE 2 — Activer le GPS du livreur
-  // Le navigateur affiche AUTOMATIQUEMENT la popup "Autoriser la localisation ?"
-  // Si le livreur dit OUI → GPS activé. Si NON → message d'erreur.
-  btn.innerHTML = '📡 Activation GPS…';
+  // Reset distance pour chaque nouvelle livraison
+  distTotale = 0; posLivreurActuel = null;
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      posDepart  = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      distTotale = haversine(posDepart.lat, posDepart.lng, destination.lat, destination.lng);
+      const posDepart = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      posLivreurActuel = posDepart;
       codeActuel = genererCode();
 
-      const data = {
-        code:           codeActuel,
-        livreur:        nom,
-        client:         client,
-        adresse:        adresse,
-        distanceTotale: distTotale,
-        depart:         posDepart,
-        destination:    { lat: destination.lat, lng: destination.lng },
-        position:       posDepart,
-        statut:         'en_route',
-        progression:    0,
-        distParcouru:   '0.00',
-        distReste:      distTotale.toFixed(2),
-        timestamp:      Date.now()
-      };
-
-      db.ref('livraisons/' + codeActuel).set(data)
-        .then(() => {
-          livreurRef = db.ref('livraisons/' + codeActuel);
-          document.getElementById('code-display').textContent   = codeActuel;
-          document.getElementById('tracking-title').textContent = 'Livraison → ' + client;
-          btn.innerHTML = '🚀 Démarrer la livraison';
-          btn.disabled  = false;
-          showPage('page-livreur-tracking');
-          demarrerGPS(destination);
-        })
-        .catch(err => {
-          btn.innerHTML = '🚀 Démarrer la livraison';
-          btn.disabled  = false;
-          afficherErreur('setup-error', 'Erreur Firebase : ' + err.message);
-        });
+      db.ref('livraisons/' + codeActuel).set({
+        code: codeActuel, livreur: nom, client: client, mode: 2,
+        depart: posDepart, position: posDepart,
+        statut: 'en_route', progression: 0, distReste: '0.00', timestamp: Date.now()
+      }).then(() => {
+        livreurRef = db.ref('livraisons/' + codeActuel);
+        document.getElementById('code-display').textContent   = codeActuel;
+        document.getElementById('tracking-title').textContent = 'Livraison → ' + client;
+        btn.innerHTML = '🚀 Démarrer'; btn.disabled = false;
+        showPage('page-livreur-tracking');
+        demarrerGPS();
+      }).catch(err => {
+        btn.innerHTML = '🚀 Démarrer la livraison'; btn.disabled = false;
+        afficherErreur('setup-error', 'Erreur Firebase : ' + err.message);
+      });
     },
     () => {
-      btn.innerHTML = '🚀 Démarrer la livraison';
-      btn.disabled  = false;
-      afficherErreur('setup-error',
-        '❌ GPS refusé. Allez dans les paramètres navigateur → Autorisez la localisation.');
+      btn.innerHTML = '🚀 Démarrer la livraison'; btn.disabled = false;
+      afficherErreur('setup-error', '❌ GPS refusé. Autorisez la localisation dans le navigateur.');
     },
     { enableHighAccuracy: true, timeout: 20000 }
   );
 }
 
 // ================================================================
-// LIVREUR — Étape 2 : GPS en continu (watchPosition)
-// destObj = coordonnées GPS de l'adresse du client
+// LIVREUR — GPS continu + écoute position client (temps réel)
 // ================================================================
-function demarrerGPS(destObj) {
-  setGPSStatus('info', '📡 GPS actif — position partagée en temps réel');
+function demarrerGPS() {
+  setGPSStatus('info', '⏳ En attente que le client entre le code…');
 
+  // ── Listener TEMPS RÉEL : dès que le client envoie sa position ──
+  clientPosListener = livreurRef.on('value', snap => {
+    const d = snap.val();
+    if (!d || !d.positionClient) return;
+    // Fixer distTotale une seule fois
+    if (distTotale === 0 && posLivreurActuel) {
+      distTotale = haversine(
+        posLivreurActuel.lat, posLivreurActuel.lng,
+        d.positionClient.lat, d.positionClient.lng
+      );
+      livreurRef.update({ distanceTotale: distTotale });
+      document.getElementById('livreur-dist-init').textContent = distTotale.toFixed(2) + ' km';
+      setGPSStatus('success', '✅ Client connecté — GPS des deux phones actif !');
+    }
+  });
+
+  // ── GPS livreur en continu ────────────────────────────────────
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
+      posLivreurActuel = { lat, lng };
 
-      // ✅ LOGIQUE CORRECTE :
-      // reste    = km entre livreur et destination client (en ligne droite GPS)
-      // parcouru = distTotale - reste
-      // 0%  → livreur au départ, loin du client
-      // 100%→ livreur arrivé chez le client
-      const reste    = Math.max(0, haversine(lat, lng, destObj.lat, destObj.lng));
-      const parcouru = Math.max(0, distTotale - reste);
-      const pct      = distTotale > 0
-                         ? Math.min(100, Math.round((parcouru / distTotale) * 100))
-                         : 0;
+      livreurRef.once('value').then(snap => {
+        const d = snap.val();
+        if (!d || !d.positionClient) {
+          livreurRef.update({ position: { lat, lng }, timestamp: Date.now() });
+          return;
+        }
 
-      // → Firebase mis à jour → le client voit la barre bouger en temps réel
-      livreurRef.update({
-        position:     { lat, lng },
-        progression:  pct,
-        distParcouru: parcouru.toFixed(2),
-        distReste:    reste.toFixed(2),
-        timestamp:    Date.now()
+        const posClient = d.positionClient;
+
+        if (distTotale === 0) {
+          distTotale = haversine(lat, lng, posClient.lat, posClient.lng);
+          livreurRef.update({ distanceTotale: distTotale });
+          document.getElementById('livreur-dist-init').textContent = distTotale.toFixed(2) + ' km';
+        }
+
+        // ✅ Calcul proximité
+        const distActuelle = Math.max(0, haversine(lat, lng, posClient.lat, posClient.lng));
+        const pct = distTotale > 0
+          ? Math.max(0, Math.min(100, Math.round((1 - distActuelle / distTotale) * 100)))
+          : 0;
+
+        livreurRef.update({ position: { lat, lng }, progression: pct, distReste: distActuelle.toFixed(2), timestamp: Date.now() });
+
+        document.getElementById('livreur-pct').textContent  = pct + '%';
+        document.getElementById('livreur-fill').style.width = Math.max(2, pct) + '%';
+        document.getElementById('livreur-dist').textContent = distActuelle.toFixed(2) + ' km';
+        setGPSStatus('success', '✅ GPS à jour · ' + new Date().toLocaleTimeString());
       });
-
-      majUILivreur(pct, parcouru, reste);
-      setGPSStatus('success', '✅ GPS à jour · ' + new Date().toLocaleTimeString());
     },
-    () => {
-      setGPSStatus('warning', '⚠️ Signal GPS faible, nouvelle tentative…');
-    },
+    () => { setGPSStatus('warning', '⚠️ Signal GPS faible…'); },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
   );
 }
 
-function majUILivreur(pct, parcouru, reste) {
-  document.getElementById('livreur-pct').textContent      = pct + '%';
-  document.getElementById('livreur-fill').style.width     = Math.max(2, pct) + '%';
-  document.getElementById('livreur-parcouru').textContent = parcouru.toFixed(2) + ' km';
-  document.getElementById('livreur-reste').textContent    = reste.toFixed(2) + ' km';
-}
-
 function setGPSStatus(type, msg) {
-  const el      = document.getElementById('gps-status');
-  el.className  = 'alert alert-' + (type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info');
+  const el = document.getElementById('gps-status');
+  el.className = 'alert alert-' + (type==='success'?'success':type==='warning'?'warning':'info');
   el.textContent = msg;
 }
 
 function confirmerFin() {
   if (!confirm('Confirmer la fin de la livraison ?')) return;
-  if (watchId)    navigator.geolocation.clearWatch(watchId);
+  nettoyerTout();
   if (livreurRef) livreurRef.update({ statut: 'livre', progression: 100 });
   showPage('page-home');
 }
 
 // ================================================================
-// CLIENT — Rejoindre une livraison
+// CLIENT — Rejoindre + activer GPS
 // ================================================================
 function rejoindreLivraison() {
-  if (!CONFIGURED) {
-    afficherErreur('client-error', '⚠️ Firebase non configuré.');
-    return;
-  }
-
   const code = document.getElementById('client-code-input').value.trim();
-  if (code.length !== 6) {
-    afficherErreur('client-error', '⚠️ Le code doit avoir exactement 6 chiffres.');
-    return;
-  }
+  if (code.length !== 6) { afficherErreur('client-error', '⚠️ Code à 6 chiffres.'); return; }
   cacherErreur('client-error');
 
   db.ref('livraisons/' + code).once('value')
     .then(snapshot => {
-      if (!snapshot.exists()) {
-        afficherErreur('client-error',
-          '❌ Code introuvable. Vérifiez le code avec votre livreur.');
-        return;
-      }
-
+      if (!snapshot.exists()) { afficherErreur('client-error', '❌ Code introuvable.'); return; }
       const data = snapshot.val();
       codeActuel = code;
 
-      // Remplir infos livreur
-      document.getElementById('client-avatar').textContent    = initiales(data.livreur);
+      document.getElementById('client-avatar').textContent      = initiales(data.livreur);
       document.getElementById('client-livreur-nom').textContent = data.livreur + ' → ' + data.client;
-
-      // Afficher le suivi
       document.getElementById('client-code-form').classList.add('hidden');
       document.getElementById('client-tracking').classList.remove('hidden');
 
-      // Écouter les mises à jour temps réel
+      // ► Activer GPS du client
+      activerGPSClient(code);
+
+      // ► Écouter progression en temps réel
       clientListener = db.ref('livraisons/' + code).on('value', snap => {
         if (snap.exists()) majUIClient(snap.val());
       });
     })
-    .catch(err => {
-      afficherErreur('client-error', 'Erreur : ' + err.message);
-    });
+    .catch(err => { afficherErreur('client-error', 'Erreur : ' + err.message); });
+}
+
+function activerGPSClient(code) {
+  if (!navigator.geolocation) return;
+  const statusEl = document.getElementById('client-gps-status');
+  statusEl.className = 'alert alert-info';
+  statusEl.textContent = '📡 Activation de votre GPS…';
+  statusEl.classList.remove('hidden');
+
+  clientWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      db.ref('livraisons/' + code).update({ positionClient: { lat: pos.coords.latitude, lng: pos.coords.longitude } });
+      statusEl.className   = 'alert alert-success';
+      statusEl.textContent = '✅ Votre GPS partagé · ' + new Date().toLocaleTimeString();
+    },
+    () => {
+      statusEl.className   = 'alert alert-warning';
+      statusEl.textContent = '⚠️ GPS refusé — suivi moins précis.';
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
 }
 
 function majUIClient(data) {
-  const pct    = data.progression  || 0;
-  const reste  = parseFloat(data.distReste) || data.distanceTotale || 0;
-  const eta    = Math.ceil((reste / 22) * 60); // vitesse estimée 22 km/h
-  const livre  = data.statut === 'livre';
+  const pct   = data.progression || 0;
+  const reste = parseFloat(data.distReste) || 0;
+  const eta   = Math.ceil((reste / 22) * 60);
+  const livre = data.statut === 'livre';
 
-  document.getElementById('client-pct').textContent       = pct + '%';
-  document.getElementById('client-fill').style.width      = Math.max(2, pct) + '%';
-  document.getElementById('client-dist-reste').textContent= reste.toFixed(1) + ' km';
-  document.getElementById('client-eta').textContent       = livre ? '✅ Arrivé' : (eta > 0 ? '~' + eta + ' min' : 'Imminent');
+  document.getElementById('client-pct').textContent        = pct + '%';
+  document.getElementById('client-fill').style.width       = Math.max(2, pct) + '%';
+  document.getElementById('client-dist-reste').textContent = reste.toFixed(2) + ' km';
+  document.getElementById('client-eta').textContent        = livre ? '✅ Arrivé' : (eta > 0 ? '~' + eta + ' min' : 'Imminent');
 
   if (livre) {
-    // Étapes → terminé
     document.getElementById('step-route').className = 'step-item done';
     document.getElementById('step-livre').className = 'step-item active';
     document.getElementById('conn-route').classList.add('done');
     document.getElementById('conn-livre').classList.add('done');
-
-    // Bannière de fin
     document.getElementById('finish-banner').classList.remove('hidden');
-    document.getElementById('finish-text').textContent =
-      'Votre commande a été livrée par ' + data.livreur + '.';
+    document.getElementById('finish-text').textContent = 'Votre commande a été livrée par ' + data.livreur + '.';
     document.getElementById('livreur-info-card').classList.add('hidden');
     document.getElementById('client-live-badge').className = 'badge badge-done';
     document.getElementById('client-live-badge').innerHTML = '✅ LIVRÉ';
+    if (clientWatchId) { navigator.geolocation.clearWatch(clientWatchId); clientWatchId = null; }
   }
 }
 
 function quitterSuivi() {
-  if (codeActuel && clientListener) {
-    db.ref('livraisons/' + codeActuel).off('value', clientListener);
-    clientListener = null;
-  }
+  if (codeActuel && clientListener) { db.ref('livraisons/' + codeActuel).off('value', clientListener); clientListener = null; }
+  if (clientWatchId) { navigator.geolocation.clearWatch(clientWatchId); clientWatchId = null; }
   document.getElementById('client-code-form').classList.remove('hidden');
   document.getElementById('client-tracking').classList.add('hidden');
   document.getElementById('client-code-input').value = '';
   document.getElementById('finish-banner').classList.add('hidden');
   document.getElementById('livreur-info-card').classList.remove('hidden');
+  document.getElementById('client-gps-status').classList.add('hidden');
   codeActuel = null;
   showPage('page-home');
 }
 
 function retourAccueilClient() {
-  if (codeActuel && clientListener) {
-    db.ref('livraisons/' + codeActuel).off('value', clientListener);
-    clientListener = null;
-  }
+  if (codeActuel && clientListener) { db.ref('livraisons/' + codeActuel).off('value', clientListener); clientListener = null; }
+  if (clientWatchId) { navigator.geolocation.clearWatch(clientWatchId); clientWatchId = null; }
   document.getElementById('client-code-form').classList.remove('hidden');
   document.getElementById('client-tracking').classList.add('hidden');
   document.getElementById('client-code-input').value = '';
@@ -1279,59 +741,5 @@ function retourAccueilClient() {
   showPage('page-home');
 }
 </script>
-
-<!--
-╔══════════════════════════════════════════════════════════════╗
-║         📋  INSTRUCTIONS DE CONFIGURATION FIREBASE           ║
-╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  ÉTAPE 1 — Créer un projet Firebase gratuit                  ║
-║  ──────────────────────────────────────────                  ║
-║  1. Allez sur https://console.firebase.google.com            ║
-║  2. Cliquez "Créer un projet"                                ║
-║  3. Donnez un nom ex: malivraison-mg                         ║
-║  4. Désactivez Google Analytics (pas nécessaire)             ║
-║  5. Cliquez "Créer le projet"                                ║
-║                                                              ║
-║  ÉTAPE 2 — Activer Realtime Database                         ║
-║  ──────────────────────────────────                          ║
-║  1. Menu gauche → "Realtime Database"                        ║
-║  2. Cliquez "Créer une base de données"                      ║
-║  3. Choisissez "Commencer en mode test"                      ║
-║  4. Cliquez "Activer"                                        ║
-║                                                              ║
-║  ÉTAPE 3 — Copier votre configuration                        ║
-║  ──────────────────────────────────────                      ║
-║  1. Roue dentée (⚙️) → "Paramètres du projet"               ║
-║  2. Onglet "Général" → défiler → "Vos applications"          ║
-║  3. Cliquez "</>" (ajouter application web)                  ║
-║  4. Copiez l'objet "firebaseConfig"                          ║
-║  5. Remplacez les valeurs dans ce fichier                    ║
-║     (cherchez VOTRE_API_KEY avec Ctrl+F)                     ║
-║                                                              ║
-║  ÉTAPE 4 — Mettre en ligne sur Vercel (gratuit)              ║
-║  ──────────────────────────────────────────────              ║
-║  1. Créez un compte sur https://vercel.com                   ║
-║  2. "Add New Project" → glissez ce fichier index.html        ║
-║  3. Votre site est en ligne ! Partagez le lien 🎉            ║
-║                                                              ║
-║  ÉTAPE 5 — Sécuriser la base de données (important)          ║
-║  ─────────────────────────────────────────────────           ║
-║  Dans Firebase → Realtime Database → Règles,                 ║
-║  remplacez les règles par :                                   ║
-║  {                                                            ║
-║    "rules": {                                                 ║
-║      "livraisons": {                                          ║
-║        "$code": {                                             ║
-║          ".read": true,                                       ║
-║          ".write": true                                       ║
-║        }                                                      ║
-║      }                                                        ║
-║    }                                                          ║
-║  }                                                            ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
--->
-
 </body>
 </html>
