@@ -481,26 +481,6 @@ body {
   font-weight: 500;
 }
 
-
-/* ── MODE SELECTOR ── */
-.mode-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-.mode-btn {
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 14px 10px;
-  text-align: center;
-  cursor: pointer;
-  background: var(--bg);
-  transition: all 0.18s;
-}
-.mode-btn.selected { border-color: var(--green); background: var(--green-light); }
-.mode-btn .mode-icon { font-size: 24px; display: block; margin-bottom: 6px; }
-.mode-btn .mode-title { font-size: 12px; font-weight: 700; color: var(--text); font-family: 'Syne', sans-serif; }
-.mode-btn .mode-sub   { font-size: 10px; color: var(--text-3); margin-top: 2px; }
-.mode-btn.selected .mode-title { color: var(--green-dark); }
-/* ── GPS CLIENT STATUS ── */
-#client-gps-status { font-size: 13px; margin-bottom: 14px; }
-
 /* ── UTILS ── */
 .hidden   { display: none !important; }
 .row      { display: flex; align-items: center; justify-content: space-between; }
@@ -617,22 +597,6 @@ body {
     <div id="setup-error" class="alert alert-error hidden"></div>
 
     <div class="card">
-      <div class="card-label">Choisissez le mode de suivi</div>
-      <div class="mode-selector">
-        <div class="mode-btn selected" id="mode-btn-1" onclick="choisirMode(1)">
-          <span class="mode-icon">🗺️</span>
-          <div class="mode-title">Mode 1</div>
-          <div class="mode-sub">Adresse fixe écrite</div>
-        </div>
-        <div class="mode-btn" id="mode-btn-2" onclick="choisirMode(2)">
-          <span class="mode-icon">📡</span>
-          <div class="mode-title">Mode 2</div>
-          <div class="mode-sub">GPS des deux phones</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
       <div class="card-label">Informations de livraison</div>
       <div class="form-group">
         <label class="form-label">Votre nom (Livreur)</label>
@@ -642,23 +606,17 @@ body {
         <label class="form-label">Nom du client</label>
         <input class="form-input" id="client-nom" type="text" placeholder="Ex : Rabe Mamy">
       </div>
-      <!-- Mode 1 : adresse -->
-      <div id="champ-adresse" class="form-group">
+      <div class="form-group">
         <label class="form-label">Adresse de livraison (chez le client)</label>
         <input class="form-input" id="adresse-client" type="text" placeholder="Ex : Analakely, Antananarivo">
         <div id="adresse-result" style="font-size:12px;margin-top:6px;color:var(--text-2);"></div>
       </div>
     </div>
 
-    <!-- Mode 1 info -->
-    <div id="info-mode-1" class="alert alert-info" style="font-size:12px;">
-      📍 Votre GPS = départ · 🗺️ Adresse écrite = destination fixe.
-    </div>
-    <!-- Mode 2 info -->
-    <div id="info-mode-2" class="alert alert-info hidden" style="font-size:12px;">
-      📡 <strong>Mode GPS des deux phones</strong><br>
-      Le client activera son GPS quand il entre le code.<br>
-      La barre monte quand vous vous <strong>rapprochez physiquement</strong>.
+    <div class="alert alert-info" style="font-size:12px;">
+      📍 Votre position GPS = point de départ.<br>
+      🗺️ L'adresse du client = destination.<br>
+      La distance est calculée <strong>automatiquement</strong>.
     </div>
 
     <button class="btn btn-primary" id="btn-demarrer" onclick="demarrerLivraison()">
@@ -850,7 +808,6 @@ body {
         </div>
       </div>
 
-      <div id="client-gps-status" class="hidden"></div>
       <button class="btn btn-secondary" onclick="quitterSuivi()">Quitter le suivi</button>
     </div>
 
@@ -911,13 +868,12 @@ if (CONFIGURED) {
 }
 
 // ── Variables globales ─────────────────────────────────────────
-let watchId           = null;   // GPS watchPosition ID
-let codeActuel        = null;   // Code livraison
-let posDepart         = null;   // {lat, lng} départ livreur
-let distTotale        = 0;      // Distance totale km
-let livreurRef        = null;   // Référence Firebase livraison
-let clientListener    = null;   // Listener temps réel client
-let clientPosListener = null;   // Listener temps réel position client (Mode 2)
+let watchId        = null;   // GPS watchPosition ID
+let codeActuel     = null;   // Code livraison
+let posDepart      = null;   // {lat, lng} départ livreur
+let distTotale     = 0;      // Distance totale km
+let livreurRef     = null;   // Référence Firebase livraison
+let clientListener = null;   // Listener temps réel client
 
 // ================================================================
 // NAVIGATION
@@ -1078,12 +1034,9 @@ async function demarrerLivraison() {
   const client  = document.getElementById('client-nom').value.trim();
   const adresse = document.getElementById('adresse-client').value.trim();
 
-  if (!nom)    { afficherErreur('setup-error', '👤 Entrez votre nom'); return; }
-  if (!client) { afficherErreur('setup-error', '📦 Entrez le nom du client'); return; }
-  if (modeActuel === 1 && !adresse) {
-    afficherErreur('setup-error', "📍 Entrez l'adresse de livraison");
-    return;
-  }
+  if (!nom)     { afficherErreur('setup-error', '👤 Entrez votre nom'); return; }
+  if (!client)  { afficherErreur('setup-error', '📦 Entrez le nom du client'); return; }
+  if (!adresse) { afficherErreur('setup-error', "📍 Entrez l'adresse de livraison"); return; }
 
   cacherErreur('setup-error');
 
@@ -1094,15 +1047,7 @@ async function demarrerLivraison() {
 
   const btn = document.getElementById('btn-demarrer');
 
-  // MODE 2 — Pas besoin d'adresse, on saute le géocodage
-  if (modeActuel === 2) {
-    btn.innerHTML = '📡 Activation GPS…';
-    btn.disabled  = true;
-    demarrerDepuisGPS(btn, nom, client, null, null);
-    return;
-  }
-
-  // MODE 1 — ÉTAPE 1 : Géocoder l'adresse
+  // ÉTAPE 1 — Chercher les coordonnées de l'adresse du client (OpenStreetMap)
   btn.innerHTML = '🗺️ Recherche adresse…';
   btn.disabled  = true;
 
@@ -1120,30 +1065,25 @@ async function demarrerLivraison() {
     return;
   }
 
+  // ÉTAPE 2 — Activer le GPS du livreur
+  // Le navigateur affiche AUTOMATIQUEMENT la popup "Autoriser la localisation ?"
+  // Si le livreur dit OUI → GPS activé. Si NON → message d'erreur.
   btn.innerHTML = '📡 Activation GPS…';
 
-  demarrerDepuisGPS(btn, nom, client, adresse, destination);
-}
-
-function demarrerDepuisGPS(btn, nom, client, adresse, destination) {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       posDepart  = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      // Mode 1 : distance vers adresse fixe. Mode 2 : 0 au départ (client pas encore connecté)
-      distTotale = (modeActuel === 1 && destination)
-                     ? haversine(posDepart.lat, posDepart.lng, destination.lat, destination.lng)
-                     : 0;  // toujours reset à 0 en Mode 2
+      distTotale = haversine(posDepart.lat, posDepart.lng, destination.lat, destination.lng);
       codeActuel = genererCode();
 
       const data = {
         code:           codeActuel,
         livreur:        nom,
         client:         client,
-        adresse:        adresse || '',
-        mode:           modeActuel,
+        adresse:        adresse,
         distanceTotale: distTotale,
         depart:         posDepart,
-        destination:    destination ? { lat: destination.lat, lng: destination.lng } : null,
+        destination:    { lat: destination.lat, lng: destination.lng },
         position:       posDepart,
         statut:         'en_route',
         progression:    0,
@@ -1160,7 +1100,7 @@ function demarrerDepuisGPS(btn, nom, client, adresse, destination) {
           btn.innerHTML = '🚀 Démarrer la livraison';
           btn.disabled  = false;
           showPage('page-livreur-tracking');
-          demarrerGPS(destination); // null en mode 2
+          demarrerGPS(destination);
         })
         .catch(err => {
           btn.innerHTML = '🚀 Démarrer la livraison';
@@ -1179,103 +1119,45 @@ function demarrerDepuisGPS(btn, nom, client, adresse, destination) {
 }
 
 // ================================================================
-// CHOIX DU MODE
-// ================================================================
-let modeActuel = 1; // 1 = adresse fixe, 2 = GPS des deux phones
-let clientWatchId = null; // watchPosition côté client (mode 2)
-
-function choisirMode(n) {
-  modeActuel = n;
-  document.getElementById('mode-btn-1').classList.toggle('selected', n === 1);
-  document.getElementById('mode-btn-2').classList.toggle('selected', n === 2);
-  document.getElementById('champ-adresse').classList.toggle('hidden', n === 2);
-  document.getElementById('info-mode-1').classList.toggle('hidden', n === 2);
-  document.getElementById('info-mode-2').classList.toggle('hidden', n === 1);
-}
-
-// ================================================================
 // LIVREUR — Étape 2 : GPS en continu (watchPosition)
+// destObj = coordonnées GPS de l'adresse du client
 // ================================================================
-// destObj = { lat, lng } destination (Mode 1 = adresse, Mode 2 = null au départ)
 function demarrerGPS(destObj) {
   setGPSStatus('info', '📡 GPS actif — position partagée en temps réel');
 
-  // posLivreurActuel : mis à jour par watchPosition
-  let posLivreurActuel = null;
-  // posClientActuel : mis à jour par le listener Firebase (Mode 2) ou fixe (Mode 1)
-  let posClientActuel  = destObj; // null si mode 2
-
-  // ── MODE 2 : écoute TEMPS RÉEL de la position client dans Firebase ──────
-  if (modeActuel === 2) {
-    // Nettoyer un éventuel ancien listener
-    if (clientPosListener && livreurRef) {
-      livreurRef.off('value', clientPosListener);
-    }
-
-    clientPosListener = livreurRef.on('value', snap => {
-      const d = snap.val();
-      if (!d) return;
-
-      // Mettre à jour la position client dès qu'elle arrive
-      if (d.positionClient) {
-        posClientActuel = d.positionClient;
-
-        // Fixer distTotale UNE SEULE FOIS quand les deux positions sont connues
-        if ((!distTotale || distTotale === 0) && posLivreurActuel) {
-          distTotale = haversine(
-            posLivreurActuel.lat, posLivreurActuel.lng,
-            posClientActuel.lat,  posClientActuel.lng
-          );
-          livreurRef.update({ distanceTotale: distTotale });
-        }
-      }
-    });
-  }
-
-  // ── GPS LIVREUR en continu ───────────────────────────────────────────────
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
-      posLivreurActuel = { lat, lng };
 
-      // Si Mode 2 et distance initiale pas encore définie mais les deux positions sont là
-      if (modeActuel === 2 && posClientActuel && (!distTotale || distTotale === 0)) {
-        distTotale = haversine(lat, lng, posClientActuel.lat, posClientActuel.lng);
-        livreurRef.update({ distanceTotale: distTotale });
-      }
+      // ✅ LOGIQUE CORRECTE :
+      // reste    = km entre livreur et destination client (en ligne droite GPS)
+      // parcouru = distTotale - reste
+      // 0%  → livreur au départ, loin du client
+      // 100%→ livreur arrivé chez le client
+      const reste    = Math.max(0, haversine(lat, lng, destObj.lat, destObj.lng));
+      const parcouru = Math.max(0, distTotale - reste);
+      const pct      = distTotale > 0
+                         ? Math.min(100, Math.round((parcouru / distTotale) * 100))
+                         : 0;
 
-      calculerEtEnvoyer(lat, lng, posClientActuel);
+      // → Firebase mis à jour → le client voit la barre bouger en temps réel
+      livreurRef.update({
+        position:     { lat, lng },
+        progression:  pct,
+        distParcouru: parcouru.toFixed(2),
+        distReste:    reste.toFixed(2),
+        timestamp:    Date.now()
+      });
+
+      majUILivreur(pct, parcouru, reste);
+      setGPSStatus('success', '✅ GPS à jour · ' + new Date().toLocaleTimeString());
     },
-    () => { setGPSStatus('warning', '⚠️ Signal GPS faible, nouvelle tentative…'); },
+    () => {
+      setGPSStatus('warning', '⚠️ Signal GPS faible, nouvelle tentative…');
+    },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
   );
-}
-
-function calculerEtEnvoyer(lat, lng, dest) {
-  if (!dest) {
-    // Mode 2 : client pas encore connecté
-    setGPSStatus('warning', '⏳ En attente du GPS du client…');
-    livreurRef.update({ position: { lat, lng }, timestamp: Date.now() });
-    return;
-  }
-
-  const reste    = Math.max(0, haversine(lat, lng, dest.lat, dest.lng));
-  const parcouru = Math.max(0, distTotale - reste);
-  const pct      = distTotale > 0
-                     ? Math.min(100, Math.round((parcouru / distTotale) * 100))
-                     : 0;
-
-  livreurRef.update({
-    position:     { lat, lng },
-    progression:  pct,
-    distParcouru: parcouru.toFixed(2),
-    distReste:    reste.toFixed(2),
-    timestamp:    Date.now()
-  });
-
-  majUILivreur(pct, parcouru, reste);
-  setGPSStatus('success', '✅ GPS à jour · ' + new Date().toLocaleTimeString());
 }
 
 function majUILivreur(pct, parcouru, reste) {
@@ -1293,13 +1175,8 @@ function setGPSStatus(type, msg) {
 
 function confirmerFin() {
   if (!confirm('Confirmer la fin de la livraison ?')) return;
-  if (watchId)             navigator.geolocation.clearWatch(watchId);
-  if (clientWatchId)       navigator.geolocation.clearWatch(clientWatchId);
-  if (clientPosListener && livreurRef) {
-    livreurRef.off('value', clientPosListener);
-    clientPosListener = null;
-  }
-  if (livreurRef)          livreurRef.update({ statut: 'livre', progression: 100 });
+  if (watchId)    navigator.geolocation.clearWatch(watchId);
+  if (livreurRef) livreurRef.update({ statut: 'livre', progression: 100 });
   showPage('page-home');
 }
 
@@ -1322,83 +1199,57 @@ function rejoindreLivraison() {
   db.ref('livraisons/' + code).once('value')
     .then(snapshot => {
       if (!snapshot.exists()) {
-        afficherErreur('client-error', '❌ Code introuvable. Vérifiez avec votre livreur.');
+        afficherErreur('client-error',
+          '❌ Code introuvable. Vérifiez le code avec votre livreur.');
         return;
       }
 
       const data = snapshot.val();
       codeActuel = code;
 
-      document.getElementById('client-avatar').textContent      = initiales(data.livreur);
+      // Remplir infos livreur
+      document.getElementById('client-avatar').textContent    = initiales(data.livreur);
       document.getElementById('client-livreur-nom').textContent = data.livreur + ' → ' + data.client;
 
+      // Afficher le suivi
       document.getElementById('client-code-form').classList.add('hidden');
       document.getElementById('client-tracking').classList.remove('hidden');
-
-      // Mode 2 — activer GPS du client
-      if (data.mode === 2) {
-        activerGPSClient(code, data);
-      }
 
       // Écouter les mises à jour temps réel
       clientListener = db.ref('livraisons/' + code).on('value', snap => {
         if (snap.exists()) majUIClient(snap.val());
       });
     })
-    .catch(err => { afficherErreur('client-error', 'Erreur : ' + err.message); });
-}
-
-// ── GPS CLIENT (Mode 2 seulement) ────────────────────────────────
-function activerGPSClient(code, data) {
-  if (!navigator.geolocation) return;
-
-  const statusEl = document.getElementById('client-gps-status');
-  statusEl.className   = 'alert alert-info';
-  statusEl.textContent = '📡 Activation de votre GPS pour le suivi précis…';
-  statusEl.classList.remove('hidden');
-
-  clientWatchId = navigator.geolocation.watchPosition(
-    (pos) => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-
-      // Envoyer position client à Firebase
-      db.ref('livraisons/' + code).update({ positionClient: { lat, lng } });
-
-      statusEl.className   = 'alert alert-success';
-      statusEl.textContent = '✅ Votre GPS partagé · ' + new Date().toLocaleTimeString();
-    },
-    () => {
-      statusEl.className   = 'alert alert-warning';
-      statusEl.textContent = '⚠️ GPS refusé — le suivi utilise l'adresse fixe.';
-    },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
-  );
+    .catch(err => {
+      afficherErreur('client-error', 'Erreur : ' + err.message);
+    });
 }
 
 function majUIClient(data) {
-  const pct   = data.progression || 0;
-  const reste = parseFloat(data.distReste) || data.distanceTotale || 0;
-  const eta   = Math.ceil((reste / 22) * 60);
-  const livre = data.statut === 'livre';
+  const pct    = data.progression  || 0;
+  const reste  = parseFloat(data.distReste) || data.distanceTotale || 0;
+  const eta    = Math.ceil((reste / 22) * 60); // vitesse estimée 22 km/h
+  const livre  = data.statut === 'livre';
 
-  document.getElementById('client-pct').textContent        = pct + '%';
-  document.getElementById('client-fill').style.width       = Math.max(2, pct) + '%';
-  document.getElementById('client-dist-reste').textContent = reste.toFixed(2) + ' km';
-  document.getElementById('client-eta').textContent        = livre ? '✅ Arrivé' : (eta > 0 ? '~' + eta + ' min' : 'Imminent');
+  document.getElementById('client-pct').textContent       = pct + '%';
+  document.getElementById('client-fill').style.width      = Math.max(2, pct) + '%';
+  document.getElementById('client-dist-reste').textContent= reste.toFixed(1) + ' km';
+  document.getElementById('client-eta').textContent       = livre ? '✅ Arrivé' : (eta > 0 ? '~' + eta + ' min' : 'Imminent');
 
   if (livre) {
+    // Étapes → terminé
     document.getElementById('step-route').className = 'step-item done';
     document.getElementById('step-livre').className = 'step-item active';
     document.getElementById('conn-route').classList.add('done');
     document.getElementById('conn-livre').classList.add('done');
+
+    // Bannière de fin
     document.getElementById('finish-banner').classList.remove('hidden');
     document.getElementById('finish-text').textContent =
       'Votre commande a été livrée par ' + data.livreur + '.';
     document.getElementById('livreur-info-card').classList.add('hidden');
     document.getElementById('client-live-badge').className = 'badge badge-done';
     document.getElementById('client-live-badge').innerHTML = '✅ LIVRÉ';
-    if (clientWatchId) navigator.geolocation.clearWatch(clientWatchId);
   }
 }
 
