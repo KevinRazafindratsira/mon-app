@@ -433,6 +433,54 @@ body {
   font-size: 12px;
 }
 
+
+/* ── LOGIN PAGE ── */
+.login-box {
+  display: flex; flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 32px 20px;
+  background: var(--bg);
+}
+.login-logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.login-logo .big-icon {
+  width: 72px; height: 72px;
+  background: var(--green);
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 34px;
+  margin: 0 auto 14px;
+  box-shadow: 0 4px 20px rgba(22,163,105,0.3);
+}
+.login-logo h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px; font-weight: 800;
+  color: var(--text);
+}
+.login-logo p {
+  font-size: 13px; color: var(--text-2); margin-top: 4px;
+}
+.login-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  padding: 24px 20px;
+  box-shadow: var(--shadow);
+}
+.user-email-badge {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--green-light);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: var(--green-dark);
+  font-weight: 500;
+}
+
 /* ── UTILS ── */
 .hidden   { display: none !important; }
 .row      { display: flex; align-items: center; justify-content: space-between; }
@@ -441,6 +489,80 @@ body {
 </style>
 </head>
 <body>
+
+<!-- ════════════════════════════════════════════
+     PAGE 0 — LOGIN LIVREUR
+════════════════════════════════════════════ -->
+<div class="page active" id="page-login">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="big-icon">🛵</div>
+      <h1>MaLivraison MG</h1>
+      <p>Espace livreur — connectez-vous</p>
+    </div>
+    <div class="login-card">
+      <div id="login-error" class="alert alert-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Adresse email</label>
+        <input class="form-input" id="login-email" type="email" placeholder="votre@email.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-input" id="login-mdp" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" id="btn-login" onclick="seConnecter()">
+        🔐 Se connecter
+      </button>
+      <div style="text-align:center;margin-top:16px;">
+        <span style="font-size:12px;color:var(--text-3);">Pas encore de compte ?</span>
+        <button onclick="showPage('page-inscription')" style="background:none;border:none;color:var(--green);font-size:12px;font-weight:600;cursor:pointer;margin-left:4px;">Créer un compte</button>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:20px;">
+      <button class="role-btn blue" onclick="showPage('page-client')" style="max-width:340px;margin:0 auto;">
+        <div class="role-icon-wrap bg-blue">📦</div>
+        <div>
+          <div class="role-title">Je suis Client</div>
+          <div class="role-sub">Suivre ma commande avec un code</div>
+        </div>
+        <span class="role-arrow">›</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     PAGE 0b — INSCRIPTION LIVREUR
+════════════════════════════════════════════ -->
+<div class="page" id="page-inscription">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="big-icon">✨</div>
+      <h1>Créer un compte</h1>
+      <p>Livreur — inscription gratuite</p>
+    </div>
+    <div class="login-card">
+      <div id="inscription-error" class="alert alert-error hidden"></div>
+      <div id="inscription-success" class="alert alert-success hidden"></div>
+      <div class="form-group">
+        <label class="form-label">Adresse email</label>
+        <input class="form-input" id="inscr-email" type="email" placeholder="votre@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe (minimum 6 caractères)</label>
+        <input class="form-input" id="inscr-mdp" type="password" placeholder="••••••••">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmer le mot de passe</label>
+        <input class="form-input" id="inscr-mdp2" type="password" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary" id="btn-inscr" onclick="sInscrire()">
+        ✅ Créer mon compte
+      </button>
+      <button class="btn btn-secondary" onclick="showPage('page-login')">← Retour connexion</button>
+    </div>
+  </div>
+</div>
 
 <!-- ════════════════════════════════════════════
      PAGE 1 — ACCUEIL
@@ -464,7 +586,11 @@ body {
     </div>
 
     <div class="card" style="padding:8px;">
-      <button class="role-btn" onclick="showPage('page-livreur-setup')">
+      <div id="home-user-badge" class="user-email-badge hidden">
+        👤 <span id="home-user-email">—</span>
+        <button onclick="seDeconnecter()" style="margin-left:auto;background:none;border:none;color:var(--red);font-size:12px;font-weight:600;cursor:pointer;">Déconnexion</button>
+      </div>
+      <button class="role-btn" onclick="allerLivreur()">
         <div class="role-icon-wrap bg-green">🛵</div>
         <div>
           <div class="role-title">Je suis Livreur</div>
@@ -727,6 +853,7 @@ body {
 ════════════════════════════════ -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
 <script>
 // ================================================================
@@ -752,10 +879,24 @@ const firebaseConfig = {
 
 // ── Init Firebase ──────────────────────────────────────────────
 const CONFIGURED = !firebaseConfig.apiKey.includes("VOTRE");
-let db;
+let db, auth;
 if (CONFIGURED) {
   firebase.initializeApp(firebaseConfig);
-  db = firebase.database();
+  db   = firebase.database();
+  auth = firebase.auth();
+
+  // Surveiller l'état de connexion au démarrage
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      // Livreur connecté → aller à l'accueil
+      document.getElementById('home-user-email').textContent = user.email;
+      document.getElementById('home-user-badge').classList.remove('hidden');
+      showPage('page-home');
+    } else {
+      // Non connecté → page login
+      showPage('page-login');
+    }
+  });
 } else {
   document.getElementById('config-warning').classList.remove('hidden');
 }
@@ -774,6 +915,99 @@ let clientListener = null;   // Listener temps réel client
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+}
+
+// ================================================================
+// AUTH — Connexion / Inscription / Déconnexion
+// ================================================================
+function seConnecter() {
+  const email = document.getElementById('login-email').value.trim();
+  const mdp   = document.getElementById('login-mdp').value;
+  const btn   = document.getElementById('btn-login');
+
+  if (!email || !mdp) {
+    afficherErreur('login-error', '⚠️ Entrez votre email et mot de passe');
+    return;
+  }
+  cacherErreur('login-error');
+  btn.innerHTML = '⏳ Connexion…';
+  btn.disabled  = true;
+
+  auth.signInWithEmailAndPassword(email, mdp)
+    .then(cred => {
+      document.getElementById('home-user-email').textContent = cred.user.email;
+      document.getElementById('home-user-badge').classList.remove('hidden');
+      btn.innerHTML = '🔐 Se connecter';
+      btn.disabled  = false;
+      document.getElementById('login-email').value = '';
+      document.getElementById('login-mdp').value   = '';
+      showPage('page-home');
+    })
+    .catch(err => {
+      btn.innerHTML = '🔐 Se connecter';
+      btn.disabled  = false;
+      const msg = err.code === 'auth/user-not-found'    ? '❌ Email introuvable. Créez un compte.'
+                : err.code === 'auth/wrong-password'    ? '❌ Mot de passe incorrect.'
+                : err.code === 'auth/invalid-email'     ? '❌ Email invalide.'
+                : err.code === 'auth/too-many-requests' ? '❌ Trop de tentatives. Réessayez plus tard.'
+                : '❌ Erreur : ' + err.message;
+      afficherErreur('login-error', msg);
+    });
+}
+
+function sInscrire() {
+  const email = document.getElementById('inscr-email').value.trim();
+  const mdp   = document.getElementById('inscr-mdp').value;
+  const mdp2  = document.getElementById('inscr-mdp2').value;
+  const btn   = document.getElementById('btn-inscr');
+
+  if (!email || !mdp) { afficherErreur('inscription-error', '⚠️ Remplissez tous les champs'); return; }
+  if (mdp.length < 6)  { afficherErreur('inscription-error', '⚠️ Mot de passe minimum 6 caractères'); return; }
+  if (mdp !== mdp2)    { afficherErreur('inscription-error', '❌ Les mots de passe ne correspondent pas'); return; }
+
+  cacherErreur('inscription-error');
+  btn.innerHTML = '⏳ Création…';
+  btn.disabled  = true;
+
+  auth.createUserWithEmailAndPassword(email, mdp)
+    .then(cred => {
+      btn.innerHTML = '✅ Créer mon compte';
+      btn.disabled  = false;
+      document.getElementById('inscr-email').value = '';
+      document.getElementById('inscr-mdp').value   = '';
+      document.getElementById('inscr-mdp2').value  = '';
+      document.getElementById('inscription-success').textContent = '✅ Compte créé ! Vous êtes connecté.';
+      document.getElementById('inscription-success').classList.remove('hidden');
+      setTimeout(() => {
+        document.getElementById('home-user-email').textContent = cred.user.email;
+        document.getElementById('home-user-badge').classList.remove('hidden');
+        showPage('page-home');
+      }, 1500);
+    })
+    .catch(err => {
+      btn.innerHTML = '✅ Créer mon compte';
+      btn.disabled  = false;
+      const msg = err.code === 'auth/email-already-in-use' ? '❌ Cet email est déjà utilisé.'
+                : err.code === 'auth/invalid-email'        ? '❌ Email invalide.'
+                : '❌ Erreur : ' + err.message;
+      afficherErreur('inscription-error', msg);
+    });
+}
+
+function seDeconnecter() {
+  if (!confirm('Se déconnecter ?')) return;
+  if (watchId)   navigator.geolocation.clearWatch(watchId);
+  if (livreurRef) livreurRef.update({ statut: 'livre' });
+  auth.signOut().then(() => showPage('page-login'));
+}
+
+// Bouton livreur → vérifie si connecté
+function allerLivreur() {
+  if (!auth || !auth.currentUser) {
+    showPage('page-login');
+  } else {
+    showPage('page-livreur-setup');
+  }
 }
 
 // ================================================================
