@@ -534,8 +534,8 @@ function calculerProximite(distKm, distTotaleKm) {
   }
 
   // Sinon, seuils absolus réalistes (basés sur la distance en mètres)
-  if (distM <= 4)   return 100;   // < 4m   = arrivé
-  if (distM <= 10)  return 95;    // < 10m
+  if (distM <= 10)   return 100;   // < 4m   = arrivé
+  if (distM <= 20)  return 95;    // < 10m
   if (distM <= 30)  return 85;    // < 30m
   if (distM <= 60)  return 70;    // < 60m
   if (distM <= 100) return 60;    // < 100m
