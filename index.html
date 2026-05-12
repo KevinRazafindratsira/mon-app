@@ -454,19 +454,19 @@ let wakeLock          = null;    // Wake Lock pour empêcher la veille écran
 let connexionListener = null;    // listener Firebase .info/connected
 let estConnecte       = true;    // état de connexion Firebase
 
-// ── Throttle & filtre ── (optimisé pour Madagascar)
-const FILTRE_DEPLACEMENT_LOIN_M  = 5;   // 5 mètres quand loin
-const FILTRE_DEPLACEMENT_PROCHE_M = 1;  // 1 mètre quand proche (très réactif)
-const THROTTLE_LOIN_MS     = 3000;      // 3 secondes quand loin (>200m)
-const THROTTLE_PROCHE_MS   = 1500;      // 1.5 secondes quand proche (<200m)
-const THROTTLE_TRES_PROCHE_MS = 800;    // 0.8 seconde quand très proche (<50m)
-let dernierEnvoiLivreur    = 0;
-let dernierEnvoiClient     = 0;
-let dernierePosEnvoyeeLivreur = null;
-let dernierePosEnvoyeeClient  = null;
-let accuracyLivreur        = 20;       // précision GPS par défaut (mètres)
-let accuracyClient         = 20;
-let distTotaleFixee        = false;
+// ── Throttle & filtre ───────────────────────────────────────────
+const FILTRE_DEPLACEMENT_LOIN_M  = 5;  // ignorer si déplacement < 5m (quand loin)
+const FILTRE_DEPLACEMENT_PROCHE_M = 2; // ignorer si déplacement < 2m (quand proche < 100m)
+const THROTTLE_LOIN_MS     = 3000;     // throttle quand loin (> 200m)
+const THROTTLE_PROCHE_MS   = 1500;     // throttle quand proche (< 200m) → plus réactif
+const THROTTLE_TRES_PROCHE_MS = 800;   // throttle quand très proche (< 50m) → très réactif
+let dernierEnvoiLivreur    = 0;        // timestamp du dernier update livreur
+let dernierEnvoiClient     = 0;        // timestamp du dernier update client
+let dernierePosEnvoyeeLivreur = null;  // dernière pos envoyée (filtre)
+let dernierePosEnvoyeeClient  = null;  // dernière pos envoyée (filtre)
+let accuracyLivreur        = 999;      // précision GPS du livreur (mètres)
+let accuracyClient         = 999;      // précision GPS du client (mètres)
+let distTotaleFixee        = false;   // empêcher la race condition
 
 // ================================================================
 // NAVIGATION
@@ -527,34 +527,48 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// ✅ FONCTION DE PROXIMITÉ CORRIGÉE pour Madagascar
-// Le GPS local a une imprécision de 10-30 mètres.
-// On considère qu'en dessous de 15 mètres mesurés, le livreur est arrivé.
+// ✅ FONCTION DE PROXIMITÉ v3 — Corrigée pour GPS Madagascar (10-30m de bruit)
 function calculerProximite(distKm, distTotaleKm) {
   const distM = distKm * 1000;
 
-  // 1. Distance suffisamment petite pour compenser l'erreur GPS
-  if (distM <= 15) return 100;
+  // ── Précision GPS combinée des deux appareils (max 60m pour éviter faux 100%) ──
+  // On prend min(accuracy, 40) pour chaque phone pour éviter les valeurs aberrantes
+  const accL = Math.min(accuracyLivreur, 40);
+  const accC = Math.min(accuracyClient === 999 ? 30 : accuracyClient, 40);
+  const precisionCombinee = accL + accC; // ex: 20+25 = 45m
 
-  // 2. Distance initiale grande (>200m) : ratio classique avec boost final
+  // ── RÈGLE 1 : Si distance < précision GPS combinée → 100% (on est au même endroit) ──
+  if (distM <= precisionCombinee) return 100;
+
+  // ── RÈGLE 2 : Boost agressif dans les derniers mètres ──
+  // Quand distM < 3x précision, on boost fortement vers 100%
+  if (distM <= precisionCombinee * 3) {
+    // Interpolation linéaire entre 85% (à 3x précision) et 99% (à 1x précision)
+    const ratio = (precisionCombinee * 3 - distM) / (precisionCombinee * 2);
+    return Math.round(85 + ratio * 14); // 85% → 99%
+  }
+
+  // ── RÈGLE 3 : Trajet long (> 200m) → ratio simple ──
   if (distTotaleKm > 0.2) {
-    let ratio = 1 - distKm / distTotaleKm;
-    // Boost pour les 50 derniers mètres
-    if (distM < 50) {
-      ratio = Math.max(ratio, 1 - distM / 50 * 0.2);
+    const ratio = Math.max(0, Math.min(1, 1 - distKm / distTotaleKm));
+    // Boost dans les 100 derniers mètres
+    if (distM < 100) {
+      return Math.round(Math.max(ratio * 100, 80 + (100 - distM) / 100 * 19));
     }
-    return Math.min(100, Math.max(0, Math.round(ratio * 100)));
+    return Math.max(0, Math.min(84, Math.round(ratio * 100)));
   }
 
-  // 3. Distance initiale faible (<200m) : courbe exponentielle douce
+  // ── RÈGLE 4 : Trajet court (< 200m) → courbe douce ──
+  if (distM <= 0) return 100;
   if (distM <= 200) {
-    let pct = 100 * (1 - Math.pow(distM / 200, 0.6));
-    return Math.min(100, Math.round(pct));
+    // Courbe : 0m→100%, 50m→75%, 100m→55%, 150m→38%, 200m→0%
+    const courbe = 1 - Math.pow(distM / 200, 0.55);
+    return Math.max(20, Math.min(84, Math.round(courbe * 100)));
   }
-  if (distM <= 500) return Math.round(100 - (distM - 200) * 0.12);  // 100→64%
-  if (distM <= 1000) return Math.round(64 - (distM - 500) * 0.09);  // 64→19%
-  if (distM <= 2000) return Math.round(19 - (distM - 1000) * 0.01); // 19→9%
-  return 2;
+  if (distM <= 500)  return Math.round(20 - (distM - 200) / 300 * 10);
+  if (distM <= 1000) return Math.round(10 - (distM - 500) / 500 * 5);
+  if (distM <= 5000) return Math.round(5  - (distM - 1000) / 4000 * 4);
+  return 1;
 }
 
 function initiales(nom) { return nom.trim().split(/\s+/).map(n=>n[0]).join('').toUpperCase().slice(0,2); }
@@ -568,12 +582,15 @@ function nettoyerTout() {
     livreurRef.child('positionClient').off('value', clientPosListener);
     clientPosListener = null;
   }
+  // Arrêter le monitoring de connexion
   if (connexionListener) {
     db.ref('.info/connected').off('value', connexionListener);
     connexionListener = null;
   }
+  // Libérer le Wake Lock
   libererWakeLock();
   watchId = null; clientWatchId = null;
+  // Reset complet pour la prochaine livraison
   distTotale = 0;
   distTotaleFixee = false;
   posLivreurActuel = null;
@@ -588,7 +605,7 @@ function nettoyerTout() {
 }
 
 // ================================================================
-// LIVREUR — Démarrer
+// LIVREUR — Démarrer (pas d'adresse, GPS direct)
 // ================================================================
 function demarrerLivraison() {
   const nom    = document.getElementById('livreur-nom').value.trim();
@@ -601,6 +618,7 @@ function demarrerLivraison() {
   const btn = document.getElementById('btn-demarrer');
   btn.innerHTML = '📡 Activation GPS…'; btn.disabled = true;
 
+  // Reset distance pour chaque nouvelle livraison
   distTotale = 0; distTotaleFixee = false; posLivreurActuel = null; posClientActuel = null;
 
   navigator.geolocation.getCurrentPosition(
@@ -634,87 +652,152 @@ function demarrerLivraison() {
 }
 
 // ================================================================
-// LIVREUR — GPS continu
+// LIVREUR — GPS continu + écoute position client (temps réel)
 // ================================================================
 function demarrerGPS() {
   setGPSStatus('info', '⏳ En attente que le client entre le code…');
+
+  // ── Wake Lock : empêcher l'écran de s'éteindre pendant la livraison ──
   activerWakeLock();
+
+  // ── Monitoring connexion Firebase ──
   demarrerMonitorConnexion();
 
-  // Écoute position client + précision
+  // ── Listener CIBLÉ : écouter UNIQUEMENT positionClient (pas tout le doc) ──
+  // ── Écouter position client ET sa précision GPS ──
   clientPosListener = livreurRef.child('positionClient').on('value', snap => {
     const pos = snap.val();
     if (!pos) return;
-    posClientActuel = pos;
-    if (!distTotaleFixee && posLivreurActuel) {
-      distTotaleFixee = true;
-      distTotale = haversine(posLivreurActuel.lat, posLivreurActuel.lng, posClientActuel.lat, posClientActuel.lng);
-      livreurRef.update({ distanceTotale: distTotale });
-      document.getElementById('livreur-dist-init').textContent = distTotale.toFixed(2) + ' km';
-      setGPSStatus('success', '✅ Client connecté — GPS actif !');
-    }
-    if (posLivreurActuel && distTotaleFixee) majUILivreurLocale();
-  });
-  livreurRef.child('accuracyClient').on('value', snap => { if (snap.val()) accuracyClient = snap.val(); });
 
-  // GPS livreur avec filtres adaptatifs
+    // ✅ Cache local mis à jour instantanément
+    posClientActuel = pos;
+
+    // ── Fixer distTotale (ou recalculer si trop petite) ──
+    if (posLivreurActuel) {
+      const nouvelleDist = haversine(
+        posLivreurActuel.lat, posLivreurActuel.lng,
+        posClientActuel.lat, posClientActuel.lng
+      );
+      const precMin = Math.min(accuracyLivreur, 40) + Math.min(accuracyClient === 999 ? 30 : accuracyClient, 40);
+      
+      // FIX : si distTotale n'est pas encore fixée OU si la distance mesurée est
+      // PLUS GRANDE que l'actuelle (les phones s'éloignent → recalibrer)
+      if (!distTotaleFixee || nouvelleDist > distTotale * 1.2) {
+        distTotaleFixee = true;
+        // Si les phones sont trop proches au départ (< précision GPS),
+        // on fixe distTotale = précision pour que la formule reste cohérente
+        distTotale = Math.max(nouvelleDist, precMin / 1000);
+        livreurRef.update({ distanceTotale: distTotale });
+        const affichage = distTotale < 1
+          ? (distTotale * 1000).toFixed(0) + ' m'
+          : distTotale.toFixed(2) + ' km';
+        document.getElementById('livreur-dist-init').textContent = affichage;
+        if (!distTotaleFixee) setGPSStatus('success', '✅ Client connecté — GPS des deux phones actif !');
+      }
+    }
+
+    // ✅ Recalculer et mettre à jour l'UI immédiatement quand le client bouge
+    if (posLivreurActuel && distTotaleFixee) {
+      majUILivreurLocale();
+    }
+  });
+
+  // ── Écouter aussi la précision GPS du client ──
+  livreurRef.child('accuracyClient').on('value', snap => {
+    const acc = snap.val();
+    if (acc) accuracyClient = acc;
+  });
+
+  // ── GPS livreur en continu (avec filtre + throttle adaptatif) ──
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
-      const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      accuracyLivreur = pos.coords.accuracy || 20;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      accuracyLivreur = pos.coords.accuracy || 20; // ✅ Capturer la précision GPS
       posLivreurActuel = { lat, lng };
-      if (posClientActuel && distTotaleFixee) majUILivreurLocale();
 
+      // ✅ Mise à jour UI LOCALE instantanée (zéro latence, pas de réseau)
+      if (posClientActuel && distTotaleFixee) {
+        majUILivreurLocale();
+      }
+
+      // ── Calcul distance actuelle vers client ──
       const distActuelleKm = posClientActuel ? haversine(lat, lng, posClientActuel.lat, posClientActuel.lng) : 999;
-      const filtreActuel = distActuelleKm < 0.1 ? FILTRE_DEPLACEMENT_PROCHE_M : FILTRE_DEPLACEMENT_LOIN_M;
-      if (dernierePosEnvoyeeLivreur) {
+      
+      // ── Pré-calcul pct pour savoir si on est proche ──
+      const pctPreview = (posClientActuel && distTotaleFixee) ? calculerProximite(distActuelleKm, distTotale) : 0;
+      const tresProche = pctPreview >= 95 || distActuelleKm * 1000 < (Math.min(accuracyLivreur,40) + Math.min(accuracyClient===999?30:accuracyClient,40)) * 3;
+
+      // ── FILTRE déplacement : désactivé si très proche (> 95%) ──
+      if (!tresProche && dernierePosEnvoyeeLivreur) {
+        const filtreActuel = distActuelleKm < 0.1 ? FILTRE_DEPLACEMENT_PROCHE_M : FILTRE_DEPLACEMENT_LOIN_M;
         const deplacementM = haversine(lat, lng, dernierePosEnvoyeeLivreur.lat, dernierePosEnvoyeeLivreur.lng) * 1000;
         if (deplacementM < filtreActuel) return;
       }
+
+      // ── THROTTLE adaptatif : très rapide si très proche ──
       const maintenant = Date.now();
-      let throttleActuel = THROTTLE_LOIN_MS;
-      if (distActuelleKm < 0.05) throttleActuel = THROTTLE_TRES_PROCHE_MS;
-      else if (distActuelleKm < 0.2) throttleActuel = THROTTLE_PROCHE_MS;
+      const throttleActuel = tresProche           ? 500              // < 50m  → toutes les 0.5s
+                           : distActuelleKm < 0.05 ? THROTTLE_TRES_PROCHE_MS
+                           : distActuelleKm < 0.2  ? THROTTLE_PROCHE_MS
+                           : THROTTLE_LOIN_MS;
       if (maintenant - dernierEnvoiLivreur < throttleActuel) return;
 
+      // Si le client n'a pas encore envoyé sa position
       if (!posClientActuel) {
         livreurRef.update({ position: { lat, lng }, accuracy: accuracyLivreur, timestamp: maintenant });
         dernierEnvoiLivreur = maintenant;
         dernierePosEnvoyeeLivreur = { lat, lng };
         return;
       }
+
+      // Fixer distTotale si pas encore fait
       if (!distTotaleFixee) {
         distTotaleFixee = true;
         distTotale = haversine(lat, lng, posClientActuel.lat, posClientActuel.lng);
         livreurRef.update({ distanceTotale: distTotale });
         document.getElementById('livreur-dist-init').textContent = distTotale.toFixed(2) + ' km';
       }
+
+      // Calcul distance + écriture Firebase throttlée
       let distActuelle = Math.max(0, haversine(lat, lng, posClientActuel.lat, posClientActuel.lng));
       const pct = calculerProximite(distActuelle, distTotale);
-      livreurRef.update({ position: { lat, lng }, accuracy: accuracyLivreur, progression: pct, distReste: distActuelle.toFixed(2), timestamp: maintenant });
+
+      livreurRef.update({ 
+        position: { lat, lng }, 
+        accuracy: accuracyLivreur,
+        progression: pct, 
+        distReste: distActuelle.toFixed(2), 
+        timestamp: maintenant 
+      });
       dernierEnvoiLivreur = maintenant;
       dernierePosEnvoyeeLivreur = { lat, lng };
     },
-    () => setGPSStatus('warning', '⚠️ Signal GPS faible…'),
+    () => { setGPSStatus('warning', '⚠️ Signal GPS faible…'); },
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
   );
 }
 
-// Mise à jour UI locale avec rafraîchissement auto si très proche
+// ✅ Mise à jour UI livreur INSTANTANÉE avec info précision GPS
 function majUILivreurLocale() {
   if (!posLivreurActuel || !posClientActuel) return;
-  const distActuelle = Math.max(0, haversine(posLivreurActuel.lat, posLivreurActuel.lng, posClientActuel.lat, posClientActuel.lng));
+  const distActuelle = Math.max(0, haversine(
+    posLivreurActuel.lat, posLivreurActuel.lng,
+    posClientActuel.lat, posClientActuel.lng
+  ));
   const pct = calculerProximite(distActuelle, distTotale);
   const distM = distActuelle * 1000;
-  const distanceAffichage = distActuelle < 1 ? distM.toFixed(0) + ' m' : distActuelle.toFixed(2) + ' km';
-  document.getElementById('livreur-pct').textContent = pct + '%';
+  const distanceAffichage = distActuelle < 1
+    ? distM.toFixed(0) + ' m'
+    : distActuelle.toFixed(2) + ' km';
+
+  document.getElementById('livreur-pct').textContent  = pct + '%';
   document.getElementById('livreur-fill').style.width = Math.max(2, pct) + '%';
   document.getElementById('livreur-dist').textContent = distanceAffichage;
-  setGPSStatus('success', `✅ Live · ${new Date().toLocaleTimeString()} · précision ±${Math.round(accuracyLivreur)}m`);
-  // Rafraîchissement accéléré si très proche
-  if (distM < 20 && pct < 100) {
-    setTimeout(() => majUILivreurLocale(), 500);
-  }
+  
+  // Afficher la précision GPS pour debug
+  const precInfo = ' · Précision: ±' + Math.round(accuracyLivreur) + 'm';
+  setGPSStatus('success', '✅ GPS à jour · ' + new Date().toLocaleTimeString() + precInfo);
 }
 
 function setGPSStatus(type, msg) {
@@ -723,22 +806,31 @@ function setGPSStatus(type, msg) {
   el.textContent = msg;
 }
 
+// ================================================================
+// WAKE LOCK — Empêcher l'écran de s'éteindre pendant la livraison
+// ================================================================
 async function activerWakeLock() {
   try {
     if ('wakeLock' in navigator) {
       wakeLock = await navigator.wakeLock.request('screen');
+      console.log('🔒 Wake Lock activé — écran restera allumé');
+      // Réactiver si la page redevient visible (après alt-tab)
       document.addEventListener('visibilitychange', async () => {
-        if (wakeLock !== null && document.visibilityState === 'visible')
+        if (wakeLock !== null && document.visibilityState === 'visible') {
           wakeLock = await navigator.wakeLock.request('screen');
+        }
       });
     }
-  } catch(e) { console.log('Wake Lock non disponible'); }
+  } catch (e) { console.log('Wake Lock non disponible:', e.message); }
 }
 
 function libererWakeLock() {
-  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+  if (wakeLock) { wakeLock.release(); wakeLock = null; console.log('🔓 Wake Lock libéré'); }
 }
 
+// ================================================================
+// CONNEXION MONITOR — Détecter perte de réseau Firebase
+// ================================================================
 function demarrerMonitorConnexion() {
   const statusEl = document.getElementById('connexion-status');
   connexionListener = db.ref('.info/connected').on('value', snap => {
@@ -749,7 +841,7 @@ function demarrerMonitorConnexion() {
       if (badge) { badge.className = 'badge badge-live'; badge.innerHTML = '<span class="pulse"></span>LIVE'; }
     } else {
       statusEl.className = 'alert alert-warning';
-      statusEl.textContent = '📡 Connexion perdue — données en attente';
+      statusEl.textContent = '📡 Connexion perdue — les données seront envoyées à la reconnexion';
       statusEl.classList.remove('hidden');
       const badge = document.getElementById('livreur-live-badge');
       if (badge) { badge.className = 'badge'; badge.style.background = '#FEF3C7'; badge.style.color = '#92400E'; badge.innerHTML = '⚠️ HORS LIGNE'; }
@@ -759,6 +851,7 @@ function demarrerMonitorConnexion() {
 
 function confirmerFin() {
   if (!confirm('Confirmer la fin de la livraison ?')) return;
+  // Sauvegarder la ref AVANT le nettoyage (qui remet livreurRef à null)
   const ref = livreurRef;
   nettoyerTout();
   if (ref) ref.update({ statut: 'livre', progression: 100 });
@@ -766,24 +859,38 @@ function confirmerFin() {
 }
 
 // ================================================================
-// CLIENT
+// CLIENT — Rejoindre + activer GPS
 // ================================================================
 function rejoindreLivraison() {
   const code = document.getElementById('client-code-input').value.trim();
   if (code.length !== 6) { afficherErreur('client-error', '⚠️ Code à 6 chiffres.'); return; }
   cacherErreur('client-error');
+
   db.ref('livraisons/' + code).once('value')
     .then(snapshot => {
       if (!snapshot.exists()) { afficherErreur('client-error', '❌ Code introuvable.'); return; }
       const data = snapshot.val();
-      if (data.statut === 'livre') { afficherErreur('client-error', '✅ Livraison déjà terminée.'); return; }
+
+      // ✅ Vérifier que la livraison n'est pas déjà terminée
+      if (data.statut === 'livre') {
+        afficherErreur('client-error', '✅ Cette livraison est déjà terminée.');
+        return;
+      }
+
       codeActuel = code;
-      document.getElementById('client-avatar').textContent = initiales(data.livreur);
+
+      document.getElementById('client-avatar').textContent      = initiales(data.livreur);
       document.getElementById('client-livreur-nom').textContent = data.livreur + ' → ' + data.client;
       document.getElementById('client-code-form').classList.add('hidden');
       document.getElementById('client-tracking').classList.remove('hidden');
+
+      // ► Activer GPS du client
       activerGPSClient(code);
-      clientListener = db.ref('livraisons/' + code).on('value', snap => { if (snap.exists()) majUIClient(snap.val()); });
+
+      // ► Écouter progression en temps réel
+      clientListener = db.ref('livraisons/' + code).on('value', snap => {
+        if (snap.exists()) majUIClient(snap.val());
+      });
     })
     .catch(err => { afficherErreur('client-error', 'Erreur : ' + err.message); });
 }
@@ -792,41 +899,61 @@ function activerGPSClient(code) {
   if (!navigator.geolocation) return;
   const statusEl = document.getElementById('client-gps-status');
   statusEl.className = 'alert alert-info';
-  statusEl.textContent = '📡 Activation GPS haute fréquence…';
+  statusEl.textContent = '📡 Activation de votre GPS…';
   statusEl.classList.remove('hidden');
+
   clientWatchId = navigator.geolocation.watchPosition(
     (pos) => {
-      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
       const acc = pos.coords.accuracy || 20;
+
+      // ── Filtre de déplacement client ──
+      // FIX : on utilise le DÉPLACEMENT DEPUIS LA DERNIÈRE POSITION ENVOYÉE,
+      // avec seuil fixe (pas variable selon lui-même)
       if (dernierePosEnvoyeeClient) {
         const deplacementM = haversine(lat, lng, dernierePosEnvoyeeClient.lat, dernierePosEnvoyeeClient.lng) * 1000;
-        const filtreClient = deplacementM < 100 ? FILTRE_DEPLACEMENT_PROCHE_M : FILTRE_DEPLACEMENT_LOIN_M;
-        if (deplacementM < filtreClient) return;
+        // Seuil 2m toujours (GPS jitter > 2m de toute façon en extérieur)
+        // Désactivé si GPS précis (acc < 15m) → on laisse passer
+        if (acc >= 15 && deplacementM < FILTRE_DEPLACEMENT_PROCHE_M) return;
       }
+
+      // ── Throttle adaptatif ──
       const maintenant = Date.now();
-      const throttleClient = acc < 20 ? THROTTLE_PROCHE_MS : THROTTLE_LOIN_MS;
+      // Si GPS très précis → envoyer plus souvent pour meilleure réactivité
+      const throttleClient = acc < 15 ? 800 : acc < 25 ? THROTTLE_PROCHE_MS : THROTTLE_LOIN_MS;
       if (maintenant - dernierEnvoiClient < throttleClient) return;
-      db.ref('livraisons/' + code).update({ positionClient: { lat, lng }, accuracyClient: acc });
+
+      db.ref('livraisons/' + code).update({ 
+        positionClient: { lat, lng },
+        accuracyClient: acc
+      });
       dernierEnvoiClient = maintenant;
       dernierePosEnvoyeeClient = { lat, lng };
-      statusEl.className = 'alert alert-success';
-      statusEl.textContent = `✅ GPS partagé · précision ±${Math.round(acc)}m · ${new Date().toLocaleTimeString()}`;
+      statusEl.className   = 'alert alert-success';
+      statusEl.textContent = '✅ Votre GPS partagé · Précision: ' + Math.round(acc) + 'm · ' + new Date().toLocaleTimeString();
     },
-    () => { statusEl.className = 'alert alert-warning'; statusEl.textContent = '⚠️ GPS refusé.'; },
+    () => {
+      statusEl.className   = 'alert alert-warning';
+      statusEl.textContent = '⚠️ GPS refusé — suivi moins précis.';
+    },
     { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
   );
 }
 
 function majUIClient(data) {
-  const pct = data.progression || 0;
+  const pct   = data.progression || 0;
   const reste = parseFloat(data.distReste) || 0;
   const resteMetres = reste * 1000;
-  const eta = Math.ceil((reste / 22) * 60);
+  const eta   = Math.ceil((reste / 22) * 60);
   const livre = data.statut === 'livre';
-  document.getElementById('client-pct').textContent = pct + '%';
-  document.getElementById('client-fill').style.width = Math.max(2, pct) + '%';
+
+  document.getElementById('client-pct').textContent        = pct + '%';
+  document.getElementById('client-fill').style.width       = Math.max(2, pct) + '%';
+  // Affichage cohérent : mètres si < 1km
   document.getElementById('client-dist-reste').textContent = reste < 1 ? resteMetres.toFixed(0) + ' m' : reste.toFixed(2) + ' km';
-  document.getElementById('client-eta').textContent = livre ? '✅ Arrivé' : (pct >= 95 ? 'Imminent !' : (eta > 0 ? '~' + eta + ' min' : 'Imminent'));
+  document.getElementById('client-eta').textContent        = livre ? '✅ Arrivé' : (pct >= 95 ? 'Imminent !' : (eta > 0 ? '~' + eta + ' min' : 'Imminent'));
+
   if (livre || pct >= 100) {
     document.getElementById('step-route').className = 'step-item done';
     document.getElementById('step-livre').className = 'step-item active';
@@ -837,13 +964,13 @@ function majUIClient(data) {
     document.getElementById('livreur-info-card').classList.add('hidden');
     document.getElementById('client-live-badge').className = 'badge badge-done';
     document.getElementById('client-live-badge').innerHTML = '✅ LIVRÉ';
-    if (clientWatchId) navigator.geolocation.clearWatch(clientWatchId);
+    if (clientWatchId) { navigator.geolocation.clearWatch(clientWatchId); clientWatchId = null; }
   }
 }
 
 function quitterSuivi() {
-  if (codeActuel && clientListener) db.ref('livraisons/' + codeActuel).off('value', clientListener);
-  if (clientWatchId) navigator.geolocation.clearWatch(clientWatchId);
+  if (codeActuel && clientListener) { db.ref('livraisons/' + codeActuel).off('value', clientListener); clientListener = null; }
+  if (clientWatchId) { navigator.geolocation.clearWatch(clientWatchId); clientWatchId = null; }
   document.getElementById('client-code-form').classList.remove('hidden');
   document.getElementById('client-tracking').classList.add('hidden');
   document.getElementById('client-code-input').value = '';
@@ -855,7 +982,13 @@ function quitterSuivi() {
 }
 
 function retourAccueilClient() {
-  quitterSuivi();
+  if (codeActuel && clientListener) { db.ref('livraisons/' + codeActuel).off('value', clientListener); clientListener = null; }
+  if (clientWatchId) { navigator.geolocation.clearWatch(clientWatchId); clientWatchId = null; }
+  document.getElementById('client-code-form').classList.remove('hidden');
+  document.getElementById('client-tracking').classList.add('hidden');
+  document.getElementById('client-code-input').value = '';
+  codeActuel = null;
+  showPage('page-home');
 }
 </script>
 </body>
