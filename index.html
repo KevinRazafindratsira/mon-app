@@ -304,7 +304,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         </div>
         <div class="stat-card">
           <div class="stat-value" id="livreur-dist-init">— km</div>
-          <div class="stat-label">Distance initiale</div>
+          <div class="stat-label">Distance de départ</div>
         </div>
       </div>
 
@@ -391,7 +391,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-value" id="client-dist-reste">— km</div>
-            <div class="stat-label">Distance actuelle</div>
+            <div class="stat-label">Distance réelle</div>
           </div>
           <div class="stat-card">
             <div class="stat-value" id="client-eta">— min</div>
@@ -467,6 +467,11 @@ let dernierePosEnvoyeeClient  = null;  // dernière pos envoyée (filtre)
 let accuracyLivreur        = 999;      // précision GPS du livreur (mètres)
 let accuracyClient         = 999;      // précision GPS du client (mètres)
 let distTotaleFixee        = false;   // empêcher la race condition
+
+// ── Moyenne glissante pour lisser les sauts de distance ──
+const HISTORIQUE_TAILLE = 5;          // garder les 5 dernières mesures
+let historiqueDistLivreur = [];        // distances GPS brutes livreur
+let historiqueDistClient  = [];        // distances GPS brutes client
 
 // ================================================================
 // NAVIGATION
@@ -572,6 +577,48 @@ function calculerProximite(distKm, distTotaleKm) {
 }
 
 function initiales(nom) { return nom.trim().split(/\s+/).map(n=>n[0]).join('').toUpperCase().slice(0,2); }
+
+// ── Lissage par moyenne glissante ──
+function ajouterHistorique(historique, valeur) {
+  historique.push(valeur);
+  if (historique.length > HISTORIQUE_TAILLE) historique.shift();
+  return historique.reduce((a, b) => a + b, 0) / historique.length;
+}
+
+// ── Correction affichage : soustraire le bruit GPS combiné ──
+// On affiche la distance RÉELLE estimée (sans le bruit GPS)
+function distanceCorrigee(distKm) {
+  const distM = distKm * 1000;
+  // Bruit GPS combiné = moyenne des deux précisions
+  const accL  = Math.min(accuracyLivreur === 999 ? 30 : accuracyLivreur, 50);
+  const accC  = Math.min(accuracyClient  === 999 ? 30 : accuracyClient,  50);
+  const bruit = (accL + accC) / 2;  // ex: (11 + 85) / 2 = 48m
+  const reel  = Math.max(0, distM - bruit);
+  return reel; // en mètres
+}
+
+// ── Formater la distance corrigée pour affichage ──
+function formaterDistance(distKm, historique) {
+  // 1. Lisser par moyenne glissante
+  const distLisseeKm = ajouterHistorique(historique, distKm);
+  // 2. Corriger le bruit GPS
+  const reelM = distanceCorrigee(distLisseeKm);
+
+  if (reelM < 3)   return '< 3 m';
+  if (reelM < 10)  return '~' + Math.round(reelM) + ' m';
+  if (reelM < 100) return Math.round(reelM / 5) * 5 + ' m';  // arrondi à 5m
+  if (reelM < 1000) return Math.round(reelM / 10) * 10 + ' m'; // arrondi à 10m
+  return (reelM / 1000).toFixed(1) + ' km';
+}
+
+// ── ETA corrigé basé sur la vraie distance ──
+function calculerETA(distKm) {
+  const reelM = distanceCorrigee(distKm);
+  if (reelM < 50) return 'Imminent !';
+  const km     = reelM / 1000;
+  const minutes = Math.ceil((km / 22) * 60); // 22 km/h moyenne
+  return '~' + minutes + ' min';
+}
 function afficherErreur(id, msg) { const el=document.getElementById(id); el.textContent=msg; el.classList.remove('hidden'); }
 function cacherErreur(id) { document.getElementById(id).classList.add('hidden'); }
 
@@ -786,11 +833,11 @@ function demarrerGPS() {
       dernierePosEnvoyeeLivreur = { lat, lng };
     },
     () => { setGPSStatus('warning', '⚠️ Signal GPS faible…'); },
-    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    { enableHighAccuracy: true, maximumAge: 500, timeout: 15000 }  // ✅ maximumAge réduit
   );
 }
 
-// ✅ Mise à jour UI livreur INSTANTANÉE avec info précision GPS
+// ✅ Mise à jour UI livreur INSTANTANÉE — distance corrigée + lissée
 function majUILivreurLocale() {
   if (!posLivreurActuel || !posClientActuel) return;
   const distActuelle = Math.max(0, haversine(
@@ -798,25 +845,34 @@ function majUILivreurLocale() {
     posClientActuel.lat, posClientActuel.lng
   ));
   const pct = calculerProximite(distActuelle, distTotale);
-  const distM = distActuelle * 1000;
-  const distanceAffichage = distActuelle < 1
-    ? distM.toFixed(0) + ' m'
-    : distActuelle.toFixed(2) + ' km';
 
-  document.getElementById('livreur-pct').textContent  = pct + '%';
-  document.getElementById('livreur-fill').style.width = Math.max(2, pct) + '%';
-  document.getElementById('livreur-dist').textContent = distanceAffichage;
-  
-  const precInfo = ' · Précision: ±' + Math.round(accuracyLivreur) + 'm';
+  // ✅ ÉTAPE 1 — Distance corrigée et lissée pour l'affichage
+  const distAffichee = formaterDistance(distActuelle, historiqueDistLivreur);
 
+  // ✅ ÉTAPE 2 — Distance initiale corrigée
+  const initM   = distanceCorrigee(distTotale);
+  const initAff = initM < 3   ? '< 3 m'
+                : initM < 100 ? Math.round(initM / 5) * 5 + ' m'
+                : initM < 1000 ? Math.round(initM / 10) * 10 + ' m'
+                : (initM / 1000).toFixed(1) + ' km';
+
+  document.getElementById('livreur-pct').textContent      = pct + '%';
+  document.getElementById('livreur-fill').style.width     = Math.max(2, pct) + '%';
+  document.getElementById('livreur-dist').textContent     = distAffichee;       // ✅ corrigé
+  document.getElementById('livreur-dist-init').textContent = initAff;           // ✅ corrigé
+
+  // ✅ ÉTAPE 3 — UX : message adapté au % de proximité
   if (pct >= 100) {
-    setGPSStatus('success', '✅ Vous êtes arrivé chez le client ! 🎉');
-    // Afficher confirmation de fin automatique
     const statusEl = document.getElementById('gps-status');
-    statusEl.className  = 'alert alert-success';
+    statusEl.className   = 'alert alert-success';
     statusEl.textContent = '🎉 Livraison terminée automatiquement ! Le client est notifié.';
+  } else if (pct >= 95) {
+    setGPSStatus('success', '📍 Presque arrivé ! Plus que ' + distAffichee);
+  } else if (pct >= 80) {
+    setGPSStatus('success', '🛵 Très proche ! ' + distAffichee + ' restants');
   } else {
-    setGPSStatus('success', '✅ GPS à jour · ' + new Date().toLocaleTimeString() + precInfo);
+    const precInfo = ' · GPS: ±' + Math.round(accuracyLivreur) + 'm';
+    setGPSStatus('success', '✅ ' + new Date().toLocaleTimeString() + precInfo);
   }
 }
 
@@ -957,22 +1013,29 @@ function activerGPSClient(code) {
       statusEl.className   = 'alert alert-warning';
       statusEl.textContent = '⚠️ GPS refusé — suivi moins précis.';
     },
-    { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    { enableHighAccuracy: true, maximumAge: 500, timeout: 15000 }  // ✅ maximumAge réduit
   );
 }
 
 function majUIClient(data) {
   const pct   = data.progression || 0;
   const reste = parseFloat(data.distReste) || 0;
-  const resteMetres = reste * 1000;
-  const eta   = Math.ceil((reste / 22) * 60);
   const livre = data.statut === 'livre';
+
+  // ✅ ÉTAPE 1 — Distance corrigée + lissée côté client
+  const distAffichee = formaterDistance(reste, historiqueDistClient);
+
+  // ✅ ÉTAPE 2 — ETA corrigé
+  const etaAff = livre        ? '✅ Arrivé !'
+               : pct >= 100   ? '✅ Arrivé !'
+               : pct >= 95    ? '🏠 Imminent !'
+               : pct >= 80    ? '📍 Presque là !'
+               : calculerETA(reste);
 
   document.getElementById('client-pct').textContent        = pct + '%';
   document.getElementById('client-fill').style.width       = Math.max(2, pct) + '%';
-  // Affichage cohérent : mètres si < 1km
-  document.getElementById('client-dist-reste').textContent = reste < 1 ? resteMetres.toFixed(0) + ' m' : reste.toFixed(2) + ' km';
-  document.getElementById('client-eta').textContent        = livre ? '✅ Arrivé' : (pct >= 95 ? 'Imminent !' : (eta > 0 ? '~' + eta + ' min' : 'Imminent'));
+  document.getElementById('client-dist-reste').textContent = distAffichee;  // ✅ corrigé
+  document.getElementById('client-eta').textContent        = etaAff;         // ✅ UX améliorée
 
   // ✅ Afficher "Livré" si statut=livre OU progression=100
   if (livre || pct >= 100) {
