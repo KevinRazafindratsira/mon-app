@@ -1,4 +1,15 @@
-
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MaLivraison MG 📡 Mode GPS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Leaflet.js — carte OpenStreetMap gratuite, légère (42KB) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -305,7 +316,14 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
       <div id="connexion-status" class="alert alert-info hidden" style="margin-top:10px;"></div>
     </div>
 
-    <button class="btn btn-danger" onclick="confirmerFin()">🏁 Terminer la livraison</button>
+    <div id="btn-terminer-wrap">
+      <button class="btn btn-danger" onclick="confirmerFin()" id="btn-terminer">
+        🏁 Terminer et confirmer la livraison
+      </button>
+      <p style="text-align:center;font-size:11px;color:var(--text-3);margin-top:8px;">
+        Cliquez après avoir remis le colis au client
+      </p>
+    </div>
   </div>
 </div>
 
@@ -460,6 +478,16 @@ let accuracyLivreur        = 999;      // précision GPS du livreur (mètres)
 let accuracyClient         = 999;      // précision GPS du client (mètres)
 let distTotaleFixee        = false;   // empêcher la race condition
 
+// ── Variables carte Leaflet ──
+let carteLeaflet       = null;   // instance de la carte
+let marqueurLivreur    = null;   // marqueur 🛵 sur la carte
+let marqueurClient     = null;   // marqueur 🏠 sur la carte
+let ligneLivreurClient = null;   // ligne entre les deux
+let cercleAccLivreur   = null;   // cercle précision GPS livreur
+let carteInitialisee   = false;  // carte créée ?
+let compteurArrivee        = 0;        // nb lectures consécutives à 99%+
+const SEUIL_ARRIVEE        = 5;        // exiger 5 lectures consécutives avant "livre"
+
 // ── Moyenne glissante pour lisser les sauts de distance ──
 const HISTORIQUE_TAILLE = 5;          // garder les 5 dernières mesures
 let historiqueDistLivreur = [];        // distances GPS brutes livreur
@@ -524,25 +552,28 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// ✅ FONCTION DE PROXIMITÉ v3 — Corrigée pour GPS Madagascar (10-30m de bruit)
+// ✅ FONCTION DE PROXIMITÉ v4 — Seuils réduits pour ne pas bloquer à 100%
 function calculerProximite(distKm, distTotaleKm) {
   const distM = distKm * 1000;
 
-  // ── Précision GPS combinée des deux appareils (max 60m pour éviter faux 100%) ──
-  // On prend min(accuracy, 40) pour chaque phone pour éviter les valeurs aberrantes
-  const accL = Math.min(accuracyLivreur, 40);
-  const accC = Math.min(accuracyClient === 999 ? 30 : accuracyClient, 40);
-  const precisionCombinee = accL + accC; // ex: 20+25 = 45m
+  // ── Précision GPS : capée à 15m par phone (max 30m combiné) ──
+  // FIX BUG 2 : avant c'était 40m → 53m combiné → 30m réel = 100% (faux !)
+  // Maintenant : 15m → 30m combiné → seulement < 30m réel = 100%
+  const accL = Math.min(accuracyLivreur === 999 ? 20 : accuracyLivreur, 15);
+  const accC = Math.min(accuracyClient  === 999 ? 20 : accuracyClient,  15);
+  const precisionCombinee = accL + accC; // max 30m
 
-  // ── RÈGLE 1 : Si distance < précision GPS combinée → 100% (on est au même endroit) ──
-  if (distM <= precisionCombinee) return 100;
-
-  // ── RÈGLE 2 : Boost agressif dans les derniers mètres ──
-  // Quand distM < 3x précision, on boost fortement vers 100%
-  if (distM <= precisionCombinee * 3) {
-    // Interpolation linéaire entre 85% (à 3x précision) et 99% (à 1x précision)
-    const ratio = (precisionCombinee * 3 - distM) / (precisionCombinee * 2);
-    return Math.round(85 + ratio * 14); // 85% → 99%
+  // ── RÈGLE 1 : 100% uniquement si distance GPS = 0 (impossible en pratique) ──
+  // ✅ RÉALISTE : 2m → 98%, 5m → 95%, 10m → 90%, 30m → 75%
+  // Formule : pct = 100 - (distM / (precisionCombinee * 2)) * 25
+  // → à 2m  : 100 - (2/60)*25  = 100 - 0.8  = 99.2% → 99%
+  // → à 5m  : 100 - (5/60)*25  = 100 - 2.1  = 97.9% → 98%
+  // → à 10m : 100 - (10/60)*25 = 100 - 4.2  = 95.8% → 96%
+  // → à 30m : 100 - (30/60)*25 = 100 - 12.5 = 87.5% → 88%
+  // → à 60m : 100 - (60/60)*25 = 100 - 25   = 75%
+  if (distM <= precisionCombinee * 2) {
+    const pct = 100 - (distM / (precisionCombinee * 2)) * 25;
+    return Math.min(99, Math.max(75, Math.round(pct)));
   }
 
   // ── RÈGLE 3 : Trajet long (> 200m) → ratio simple ──
@@ -719,20 +750,22 @@ function demarrerGPS() {
       );
       const precMin = Math.min(accuracyLivreur, 40) + Math.min(accuracyClient === 999 ? 30 : accuracyClient, 40);
       
-      // FIX : si distTotale n'est pas encore fixée OU si la distance mesurée est
-      // PLUS GRANDE que l'actuelle (les phones s'éloignent → recalibrer)
-      if (!distTotaleFixee || nouvelleDist > distTotale * 1.2) {
+      // ✅ FIX BUG 3 : distTotale = TOUJOURS le maximum mesuré
+      // Si phones s'éloignent → distTotale monte → formule reste correcte
+      // Si phones se rapprochent → distTotale reste au max → % monte vers 100%
+      const DIST_MIN_KM = 0.010; // 10m minimum pour éviter division par zéro
+      if (!distTotaleFixee) {
+        // Premier calcul : fixer distTotale
         distTotaleFixee = true;
-        // Si les phones sont trop proches au départ (< précision GPS),
-        // on fixe distTotale = précision pour que la formule reste cohérente
-        distTotale = Math.max(nouvelleDist, precMin / 1000);
-        livreurRef.update({ distanceTotale: distTotale });
-        const affichage = distTotale < 1
-          ? (distTotale * 1000).toFixed(0) + ' m'
-          : distTotale.toFixed(2) + ' km';
-        document.getElementById('livreur-dist-init').textContent = affichage;
-        if (!distTotaleFixee) setGPSStatus('success', '✅ Client connecté — GPS des deux phones actif !');
+        distTotale = Math.max(nouvelleDist, DIST_MIN_KM);
+        setGPSStatus('success', '✅ Client connecté ! Distance initiale: ' + Math.round(distTotale * 1000) + 'm');
+      } else if (nouvelleDist > distTotale) {
+        // Phones qui s'éloignent → recalibrer à la hausse
+        distTotale = nouvelleDist;
       }
+      // Jamais à la baisse : distTotale garde le max historique
+      distTotale = Math.max(distTotale, DIST_MIN_KM);
+      livreurRef.update({ distanceTotale: distTotale });
     }
 
     // ✅ Recalculer et mettre à jour l'UI immédiatement quand le client bouge
@@ -810,15 +843,9 @@ function demarrerGPS() {
         timestamp: maintenant 
       };
 
-      // ✅ AUTO-TERMINER : si pct=100, changer statut → "livre" automatiquement
-      if (pct >= 100) {
-        updateData.statut    = 'livre';
-        updateData.progression = 100;
-        // Arrêter le GPS après 2 secondes (laisser le temps à Firebase de notifier)
-        setTimeout(() => {
-          if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-        }, 2000);
-      }
+      // ✅ PAS D'AUTO-TERMINER — le livreur clique manuellement "Terminer"
+      // Raison : le jitter GPS (10-40m) déclenche de fausses fins de livraison
+      // Le livreur confirme lui-même après remise du colis en main propre
 
       livreurRef.update(updateData);
       dernierEnvoiLivreur = maintenant;
@@ -854,10 +881,11 @@ function majUILivreurLocale() {
   document.getElementById('livreur-dist-init').textContent = initAff;           // ✅ corrigé
 
   // ✅ ÉTAPE 3 — UX : message adapté au % de proximité
-  if (pct >= 100) {
-    const statusEl = document.getElementById('gps-status');
-    statusEl.className   = 'alert alert-success';
-    statusEl.textContent = '🎉 Livraison terminée automatiquement ! Le client est notifié.';
+  if (pct >= 99) {
+    setGPSStatus('success', '🏠 Vous êtes arrivé ! Remettez le colis puis cliquez Terminer ↓');
+    // Faire clignoter le bouton terminer
+    const btnT = document.getElementById('btn-terminer');
+    if (btnT) { btnT.style.animation = 'pulse-btn 1s infinite'; }
   } else if (pct >= 95) {
     setGPSStatus('success', '📍 Presque arrivé ! Plus que ' + distAffichee);
   } else if (pct >= 80) {
@@ -966,47 +994,159 @@ function rejoindreLivraison() {
 function activerGPSClient(code) {
   if (!navigator.geolocation) return;
   const statusEl = document.getElementById('client-gps-status');
-  statusEl.className = 'alert alert-info';
-  statusEl.textContent = '📡 Activation de votre GPS…';
+  statusEl.className   = 'alert alert-info';
+  statusEl.textContent = '📡 Activation GPS… Autorisez la localisation si demandé.';
   statusEl.classList.remove('hidden');
+
+  let premierEnvoi = true; // ✅ FIX BUG 1 : forcer envoi immédiat au premier appel
 
   clientWatchId = navigator.geolocation.watchPosition(
     (pos) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
-      const acc = pos.coords.accuracy || 20;
+      const acc = pos.coords.accuracy || 30;
+      const maintenant = Date.now();
 
-      // ── Filtre de déplacement client ──
-      // FIX : on utilise le DÉPLACEMENT DEPUIS LA DERNIÈRE POSITION ENVOYÉE,
-      // avec seuil fixe (pas variable selon lui-même)
-      if (dernierePosEnvoyeeClient) {
-        const deplacementM = haversine(lat, lng, dernierePosEnvoyeeClient.lat, dernierePosEnvoyeeClient.lng) * 1000;
-        // Seuil 2m toujours (GPS jitter > 2m de toute façon en extérieur)
-        // Désactivé si GPS précis (acc < 15m) → on laisse passer
-        if (acc >= 15 && deplacementM < FILTRE_DEPLACEMENT_PROCHE_M) return;
+      // ✅ PREMIER ENVOI : toujours envoyer immédiatement, sans aucun filtre
+      if (premierEnvoi) {
+        premierEnvoi = false;
+        db.ref('livraisons/' + code).update({
+          positionClient: { lat, lng },
+          accuracyClient: acc
+        });
+        dernierEnvoiClient       = maintenant;
+        dernierePosEnvoyeeClient = { lat, lng };
+        statusEl.className   = 'alert alert-success';
+        statusEl.textContent = '✅ GPS activé · Précision: ±' + Math.round(acc) + 'm';
+        return;
       }
 
-      // ── Throttle adaptatif ──
-      const maintenant = Date.now();
-      // Si GPS très précis → envoyer plus souvent pour meilleure réactivité
-      const throttleClient = acc < 15 ? 800 : acc < 25 ? THROTTLE_PROCHE_MS : THROTTLE_LOIN_MS;
-      if (maintenant - dernierEnvoiClient < throttleClient) return;
+      // ── Envois suivants : filtre déplacement (min 3m) ──
+      if (dernierePosEnvoyeeClient) {
+        const deplacementM = haversine(lat, lng, dernierePosEnvoyeeClient.lat, dernierePosEnvoyeeClient.lng) * 1000;
+        if (deplacementM < 3) return; // ignorer si moins de 3m de mouvement
+      }
 
-      db.ref('livraisons/' + code).update({ 
+      // ── Throttle : max 1 envoi par 2 secondes ──
+      if (maintenant - dernierEnvoiClient < 2000) return;
+
+      db.ref('livraisons/' + code).update({
         positionClient: { lat, lng },
         accuracyClient: acc
       });
-      dernierEnvoiClient = maintenant;
+      dernierEnvoiClient       = maintenant;
       dernierePosEnvoyeeClient = { lat, lng };
       statusEl.className   = 'alert alert-success';
-      statusEl.textContent = '✅ Votre GPS partagé · Précision: ' + Math.round(acc) + 'm · ' + new Date().toLocaleTimeString();
+      statusEl.textContent = '✅ GPS à jour · ±' + Math.round(acc) + 'm · ' + new Date().toLocaleTimeString();
     },
-    () => {
+    (err) => {
       statusEl.className   = 'alert alert-warning';
-      statusEl.textContent = '⚠️ GPS refusé — suivi moins précis.';
+      statusEl.textContent = '⚠️ GPS refusé. Allez dans paramètres navigateur → Autoriser localisation.';
+      premierEnvoi = false;
     },
-    { enableHighAccuracy: true, maximumAge: 500, timeout: 15000 }  // ✅ maximumAge réduit
+    { enableHighAccuracy: true, maximumAge: 500, timeout: 20000 }
   );
+}
+
+// ================================================================
+// CARTE LEAFLET — OpenStreetMap (gratuit, sans clé API)
+// ================================================================
+
+// Icônes personnalisées légères (pas d'images externes)
+function creerIcone(emoji, couleur) {
+  return L.divIcon({
+    className: '',
+    html: '<div style="background:' + couleur + ';border:3px solid white;border-radius:50%;'
+        + 'width:34px;height:34px;display:flex;align-items:center;justify-content:center;'
+        + 'font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,0.3);">' + emoji + '</div>',
+    iconSize:   [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor:[0, -17]
+  });
+}
+
+function initialiserCarte(latLiv, lngLiv, latCli, lngCli) {
+  // Afficher la carte, cacher le loading
+  document.getElementById('carte-loading').classList.add('hidden');
+  document.getElementById('carte-client').classList.remove('hidden');
+
+  const centre = [(latLiv + latCli) / 2, (lngLiv + lngCli) / 2];
+
+  // Créer la carte Leaflet
+  carteLeaflet = L.map('carte-client', {
+    center:          centre,
+    zoom:            16,
+    zoomControl:     true,
+    attributionControl: false
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(carteLeaflet);
+
+  marqueurLivreur = L.marker([latLiv, lngLiv], {
+    icon: creerIcone('🛵', '#16A369'), zIndexOffset: 100
+  }).addTo(carteLeaflet).bindPopup('🛵 Livreur');
+
+  marqueurClient = L.marker([latCli, lngCli], {
+    icon: creerIcone('🏠', '#3B82F6'), zIndexOffset: 50
+  }).addTo(carteLeaflet).bindPopup('🏠 Votre position');
+
+  ligneLivreurClient = L.polyline(
+    [[latLiv, lngLiv], [latCli, lngCli]],
+    { color: '#16A369', weight: 3, dashArray: '6,8', opacity: 0.7 }
+  ).addTo(carteLeaflet);
+
+  // ✅ FIX : invalider la taille APRÈS que le div est visible
+  // Sans ça, Leaflet ne calcule pas les dimensions → carte vide
+  setTimeout(() => {
+    carteLeaflet.invalidateSize();
+    const bounds = L.latLngBounds([[latLiv,lngLiv],[latCli,lngCli]]);
+    carteLeaflet.fitBounds(bounds, { padding: [50, 50] });
+  }, 100);
+
+  carteInitialisee = true;
+}
+
+function mettreAJourCarte(latLiv, lngLiv, latCli, lngCli, accLiv) {
+  if (!carteInitialisee) {
+    initialiserCarte(latLiv, lngLiv, latCli, lngCli);
+    return;
+  }
+
+  // Déplacer marqueur livreur en douceur
+  marqueurLivreur.setLatLng([latLiv, lngLiv]);
+
+  // Mettre à jour la ligne
+  ligneLivreurClient.setLatLngs([[latLiv,lngLiv],[latCli,lngCli]]);
+
+  // Cercle de précision GPS livreur (optionnel, léger)
+  if (accLiv && accLiv < 100) {
+    if (cercleAccLivreur) {
+      cercleAccLivreur.setLatLng([latLiv, lngLiv]).setRadius(accLiv);
+    } else {
+      cercleAccLivreur = L.circle([latLiv, lngLiv], {
+        radius:      accLiv,
+        color:       '#16A369',
+        fillColor:   '#16A369',
+        fillOpacity: 0.08,
+        weight:      1
+      }).addTo(carteLeaflet);
+    }
+  }
+
+  // Recentrer doucement pour garder les deux marqueurs visibles
+  const bounds = L.latLngBounds([[latLiv,lngLiv],[latCli,lngCli]]);
+  carteLeaflet.fitBounds(bounds, { padding: [50, 50], animate: true, duration: 0.8 });
+}
+
+function detruireCarte() {
+  if (carteLeaflet) { carteLeaflet.remove(); carteLeaflet = null; }
+  marqueurLivreur = marqueurClient = ligneLivreurClient = cercleAccLivreur = null;
+  carteInitialisee = false;
+  document.getElementById('carte-loading').classList.remove('hidden');
+  document.getElementById('carte-client').classList.add('hidden');
 }
 
 function majUIClient(data) {
@@ -1026,8 +1166,17 @@ function majUIClient(data) {
 
   document.getElementById('client-pct').textContent        = pct + '%';
   document.getElementById('client-fill').style.width       = Math.max(2, pct) + '%';
-  document.getElementById('client-dist-reste').textContent = distAffichee;  // ✅ corrigé
-  document.getElementById('client-eta').textContent        = etaAff;         // ✅ UX améliorée
+  document.getElementById('client-dist-reste').textContent = distAffichee;
+  document.getElementById('client-eta').textContent        = etaAff;
+
+  // ✅ CARTE — toujours afficher (même livraison terminée)
+  if (data.position && data.positionClient) {
+    mettreAJourCarte(
+      data.position.lat,       data.position.lng,
+      data.positionClient.lat, data.positionClient.lng,
+      data.accuracy || 50
+    );
+  }
 
   // ✅ Afficher "Livré" si statut=livre OU progression=100
   if (livre || pct >= 100) {
@@ -1047,6 +1196,7 @@ function majUIClient(data) {
 function quitterSuivi() {
   if (codeActuel && clientListener) { db.ref('livraisons/' + codeActuel).off('value', clientListener); clientListener = null; }
   if (clientWatchId) { navigator.geolocation.clearWatch(clientWatchId); clientWatchId = null; }
+  detruireCarte(); // ✅ Libérer la mémoire de la carte
   document.getElementById('client-code-form').classList.remove('hidden');
   document.getElementById('client-tracking').classList.add('hidden');
   document.getElementById('client-code-input').value = '';
@@ -1060,6 +1210,7 @@ function quitterSuivi() {
 function retourAccueilClient() {
   if (codeActuel && clientListener) { db.ref('livraisons/' + codeActuel).off('value', clientListener); clientListener = null; }
   if (clientWatchId) { navigator.geolocation.clearWatch(clientWatchId); clientWatchId = null; }
+  detruireCarte();
   document.getElementById('client-code-form').classList.remove('hidden');
   document.getElementById('client-tracking').classList.add('hidden');
   document.getElementById('client-code-input').value = '';
