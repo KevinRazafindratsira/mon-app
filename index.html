@@ -154,6 +154,50 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .hidden  { display: none !important; }
 .row     { display: flex; align-items: center; justify-content: space-between; }
 .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* ── CARTE LEAFLET ── */
+.carte-wrap {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+  background: var(--surface);
+}
+.carte-header {
+  padding: 12px 16px 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.carte-header-label {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-3);
+}
+.carte-header-badge {
+  font-size: 10px; font-weight: 600;
+  background: var(--green-light); color: var(--green-dark);
+  border-radius: 20px; padding: 3px 9px;
+}
+#carte-client {
+  width: 100%;
+  height: 260px;
+}
+#carte-loading {
+  height: 260px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: var(--bg);
+  color: var(--text-3); font-size: 13px; gap: 10px;
+}
+.carte-spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--green-mid);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse-btn { 0%,100%{opacity:1;} 50%{opacity:0.6;} }
 </style>
 </head>
 <body>
@@ -371,6 +415,21 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
       </div>
 
       <div id="client-gps-status" class="hidden"></div>
+
+      <!-- ── CARTE OPENSTREETMAP ── -->
+      <div class="carte-wrap">
+        <div class="carte-header">
+          <span class="carte-header-label">🗺️ Carte en direct</span>
+          <span class="carte-header-badge">OpenStreetMap · Gratuit</span>
+        </div>
+        <!-- Loading affiché tant que les 2 positions GPS ne sont pas connues -->
+        <div id="carte-loading">
+          <div class="carte-spinner"></div>
+          <span>En attente des positions GPS…</span>
+        </div>
+        <!-- La carte Leaflet s'affiche ici dès que les 2 GPS sont actifs -->
+        <div id="carte-client" class="hidden"></div>
+      </div>
 
       <div class="card">
         <div class="steps-wrap">
