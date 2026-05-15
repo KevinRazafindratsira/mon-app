@@ -356,7 +356,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <span class="milestone-txt">Arrivé ✅</span>
       </div>
 
-      <div class="stats-grid">
+      <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr;">
         <div class="stat-card">
           <div class="stat-value" id="livreur-dist">— km</div>
           <div class="stat-label">Distance actuelle</div>
@@ -364,6 +364,10 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <div class="stat-card">
           <div class="stat-value" id="livreur-dist-init">— km</div>
           <div class="stat-label">Distance de départ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="livreur-vitesse">0 km/h</div>
+          <div class="stat-label">Vitesse GPS</div>
         </div>
       </div>
 
@@ -560,7 +564,18 @@ let dernierePosEnvoyeeLivreur = null;  // dernière pos envoyée (filtre)
 let dernierePosEnvoyeeClient  = null;  // dernière pos envoyée (filtre)
 let accuracyLivreur        = 999;      // précision GPS du livreur (mètres)
 let accuracyClient         = 999;      // précision GPS du client (mètres)
+let vitesseLivreur         = 0;        // vitesse GPS livreur en m/s
 let distTotaleFixee        = false;   // empêcher la race condition
+
+// ── Animation fluide marqueur livreur ──
+let animFrameId            = null;     // requestAnimationFrame ID
+let animFrameClientId      = null;     // animation marqueur client
+let posMarqueurLiv         = null;     // position rendue actuellement (livreur)
+let posMarqueurCli         = null;     // position rendue actuellement (client)
+let posMarqueurLivCible    = null;     // position cible livreur
+let posMarqueurCliCible    = null;     // position cible client
+let tsDebutAnim            = 0;        // timestamp début animation
+const DUREE_ANIM_MS        = 900;      // durée interpolation (ms)
 
 // ── Variables carte Leaflet ──
 let carteLeaflet       = null;   // instance de la carte
@@ -871,7 +886,8 @@ function demarrerGPS() {
     (pos) => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
-      accuracyLivreur = pos.coords.accuracy || 20; // ✅ Capturer la précision GPS
+      accuracyLivreur = pos.coords.accuracy || 20;
+      vitesseLivreur  = pos.coords.speed   || 0;   // m/s (0 si arrêté)
       posLivreurActuel = { lat, lng };
 
       // ✅ Mise à jour UI LOCALE instantanée (zéro latence, pas de réseau)
@@ -886,19 +902,25 @@ function demarrerGPS() {
       const pctPreview = (posClientActuel && distTotaleFixee) ? calculerProximite(distActuelleKm, distTotale) : 0;
       const tresProche = pctPreview >= 95 || distActuelleKm * 1000 < (Math.min(accuracyLivreur,40) + Math.min(accuracyClient===999?30:accuracyClient,40)) * 3;
 
-      // ── FILTRE déplacement : désactivé si très proche (> 95%) ──
-      if (!tresProche && dernierePosEnvoyeeLivreur) {
+      // ── FILTRE déplacement : désactivé si très proche (> 95%) ou rapide ──
+      if (!tresProche && vitesseLivreur < 8 && dernierePosEnvoyeeLivreur) {
         const filtreActuel = distActuelleKm < 0.1 ? FILTRE_DEPLACEMENT_PROCHE_M : FILTRE_DEPLACEMENT_LOIN_M;
         const deplacementM = haversine(lat, lng, dernierePosEnvoyeeLivreur.lat, dernierePosEnvoyeeLivreur.lng) * 1000;
         if (deplacementM < filtreActuel) return;
       }
 
-      // ── THROTTLE adaptatif : très rapide si très proche ──
+      // ── THROTTLE adaptatif — vitesse GPS en priorité ──
+      // vitesseLivreur en m/s : 8=29km/h · 17=61km/h · 28=101km/h
       const maintenant = Date.now();
-      const throttleActuel = tresProche           ? 500              // < 50m  → toutes les 0.5s
-                           : distActuelleKm < 0.05 ? THROTTLE_TRES_PROCHE_MS
-                           : distActuelleKm < 0.2  ? THROTTLE_PROCHE_MS
-                           : THROTTLE_LOIN_MS;
+      const throttleActuel =
+          tresProche           ? 400              // arrivée imminente → 0.4s
+        : vitesseLivreur > 25  ? 300              // > 90 km/h  → 0.3s
+        : vitesseLivreur > 16  ? 500              // > 58 km/h  → 0.5s
+        : vitesseLivreur > 8   ? 800              // > 29 km/h  → 0.8s
+        : distActuelleKm < 0.05 ? THROTTLE_TRES_PROCHE_MS
+        : distActuelleKm < 0.2  ? THROTTLE_PROCHE_MS
+        : THROTTLE_LOIN_MS;
+
       if (maintenant - dernierEnvoiLivreur < throttleActuel) return;
 
       // Si le client n'a pas encore envoyé sa position
@@ -922,11 +944,12 @@ function demarrerGPS() {
       const pct = calculerProximite(distActuelle, distTotale);
 
       const updateData = { 
-        position: { lat, lng }, 
-        accuracy: accuracyLivreur,
+        position:    { lat, lng }, 
+        accuracy:    accuracyLivreur,
+        vitesse:     Math.round(vitesseLivreur * 3.6), // km/h pour affichage
         progression: pct, 
-        distReste: distActuelle.toFixed(2), 
-        timestamp: maintenant 
+        distReste:   distActuelle.toFixed(2), 
+        timestamp:   maintenant 
       };
 
       // ✅ PAS D'AUTO-TERMINER — le livreur clique manuellement "Terminer"
@@ -963,8 +986,13 @@ function majUILivreurLocale() {
 
   document.getElementById('livreur-pct').textContent      = pct + '%';
   document.getElementById('livreur-fill').style.width     = Math.max(2, pct) + '%';
-  document.getElementById('livreur-dist').textContent     = distAffichee;       // ✅ corrigé
-  document.getElementById('livreur-dist-init').textContent = initAff;           // ✅ corrigé
+  document.getElementById('livreur-dist').textContent     = distAffichee;
+  document.getElementById('livreur-dist-init').textContent = initAff;
+
+  // ✅ Vitesse GPS en km/h
+  const kmh = Math.round(vitesseLivreur * 3.6);
+  document.getElementById('livreur-vitesse').textContent =
+    kmh > 0 ? kmh + ' km/h' : 'Arrêté';
 
   // ✅ CARTE LIVREUR — mise à jour avec les deux positions
   mettreAJourCarteLivreur(
@@ -1207,8 +1235,8 @@ function mettreAJourCarte(latLiv, lngLiv, latCli, lngCli, accLiv) {
     return;
   }
 
-  // Déplacer marqueur livreur en douceur
-  marqueurLivreur.setLatLng([latLiv, lngLiv]);
+  // ✅ Animation fluide du marqueur livreur sur la carte client
+  animerMarqueurClient(latLiv, lngLiv);
 
   // Mettre à jour la ligne
   ligneLivreurClient.setLatLngs([[latLiv,lngLiv],[latCli,lngCli]]);
@@ -1291,7 +1319,8 @@ function mettreAJourCarteLivreur(latLiv, lngLiv, latCli, lngCli) {
     initialiserCarteLivreur(latLiv, lngLiv, latCli, lngCli);
     return;
   }
-  marqueurLivreurMap.setLatLng([latLiv, lngLiv]);
+  // ✅ Animation fluide au lieu de téléportation
+  animerMarqueurLivreur(latLiv, lngLiv);
   ligneLivreurMap.setLatLngs([[latLiv, lngLiv], [latCli, lngCli]]);
 
   const bounds = L.latLngBounds([[latLiv, lngLiv], [latCli, lngCli]]);
@@ -1301,7 +1330,75 @@ function mettreAJourCarteLivreur(latLiv, lngLiv, latCli, lngCli) {
 // ================================================================
 // CARTE LIVREUR — Détruire proprement
 // ================================================================
+// ================================================================
+// ANIMATION FLUIDE DES MARQUEURS — interpolation linéaire (lerp)
+// Le marqueur 🛵 glisse doucement vers la nouvelle position GPS
+// au lieu de téléporter d'un seul coup
+// ================================================================
+
+// Lerp simple entre deux valeurs
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// Easing : accélération au début, décélération à la fin (plus naturel)
+function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+// Lancer l'animation du marqueur livreur vers une nouvelle position
+function animerMarqueurLivreur(latCible, lngCible) {
+  if (!marqueurLivreurMap) return;
+
+  // Annuler l'animation précédente si elle tourne encore
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+
+  const posActuelle = marqueurLivreurMap.getLatLng();
+  const latDepart   = posActuelle.lat;
+  const lngDepart   = posActuelle.lng;
+  const debut       = performance.now();
+
+  // Adapter la durée à la vitesse : rapide → animation plus courte
+  // pour que le marqueur reste "en phase" avec la réalité
+  const duree = vitesseLivreur > 16 ? 500   // > 58 km/h → 0.5s
+              : vitesseLivreur > 8  ? 700   // > 29 km/h → 0.7s
+              : DUREE_ANIM_MS;             // lent/arrêté → 0.9s
+
+  function frame(maintenant) {
+    const t = Math.min(1, (maintenant - debut) / duree);
+    const te = easeInOut(t);
+    const latInterp = lerp(latDepart, latCible, te);
+    const lngInterp = lerp(lngDepart, lngCible, te);
+    marqueurLivreurMap.setLatLng([latInterp, lngInterp]);
+    if (t < 1) {
+      animFrameId = requestAnimationFrame(frame);
+    } else {
+      animFrameId = null;
+    }
+  }
+  animFrameId = requestAnimationFrame(frame);
+}
+
+// Animation marqueur client (côté client — même principe)
+function animerMarqueurClient(latCible, lngCible) {
+  if (!marqueurLivreur) return; // marqueurLivreur = marqueur 🛵 sur carte client
+
+  if (animFrameClientId) { cancelAnimationFrame(animFrameClientId); animFrameClientId = null; }
+
+  const posActuelle = marqueurLivreur.getLatLng();
+  const latDepart   = posActuelle.lat;
+  const lngDepart   = posActuelle.lng;
+  const debut       = performance.now();
+
+  function frame(maintenant) {
+    const t  = Math.min(1, (maintenant - debut) / DUREE_ANIM_MS);
+    const te = easeInOut(t);
+    marqueurLivreur.setLatLng([lerp(latDepart, latCible, te), lerp(lngDepart, lngCible, te)]);
+    if (t < 1) animFrameClientId = requestAnimationFrame(frame);
+    else animFrameClientId = null;
+  }
+  animFrameClientId = requestAnimationFrame(frame);
+}
+
 function detruireCarteLivreur() {
+  if (animFrameId)       { cancelAnimationFrame(animFrameId);       animFrameId = null; }
+  if (animFrameClientId) { cancelAnimationFrame(animFrameClientId); animFrameClientId = null; }
   if (carteLivreurMap) { carteLivreurMap.remove(); carteLivreurMap = null; }
   marqueurLivreurMap = marqueurClientMap = ligneLivreurMap = null;
   carteLivreurInit = false;
