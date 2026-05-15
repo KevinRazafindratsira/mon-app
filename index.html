@@ -189,6 +189,18 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   background: var(--bg);
   color: var(--text-3); font-size: 13px; gap: 10px;
 }
+/* Carte livreur — même style */
+#carte-livreur {
+  width: 100%;
+  height: 240px;
+}
+#carte-livreur-loading {
+  height: 240px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: var(--bg);
+  color: var(--text-3); font-size: 13px; gap: 10px;
+}
 .carte-spinner {
   width: 32px; height: 32px;
   border: 3px solid var(--green-mid);
@@ -358,6 +370,19 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
       <div class="divider"></div>
       <div id="gps-status" class="alert alert-info" style="margin:0;">⏳ En attente du GPS du client…</div>
       <div id="connexion-status" class="alert alert-info hidden" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- ── CARTE LIVREUR — OpenStreetMap ── -->
+    <div class="carte-wrap">
+      <div class="carte-header">
+        <span class="carte-header-label">🗺️ Ma position · Client</span>
+        <span class="carte-header-badge">OpenStreetMap · Gratuit</span>
+      </div>
+      <div id="carte-livreur-loading">
+        <div class="carte-spinner"></div>
+        <span>En attente du GPS du client…</span>
+      </div>
+      <div id="carte-livreur" class="hidden"></div>
     </div>
 
     <div id="btn-terminer-wrap">
@@ -719,6 +744,8 @@ function nettoyerTout() {
   // Libérer le Wake Lock
   libererWakeLock();
   watchId = null; clientWatchId = null;
+  // Détruire la carte livreur
+  detruireCarteLivreur();
   // Reset complet pour la prochaine livraison
   distTotale = 0;
   distTotaleFixee = false;
@@ -938,6 +965,12 @@ function majUILivreurLocale() {
   document.getElementById('livreur-fill').style.width     = Math.max(2, pct) + '%';
   document.getElementById('livreur-dist').textContent     = distAffichee;       // ✅ corrigé
   document.getElementById('livreur-dist-init').textContent = initAff;           // ✅ corrigé
+
+  // ✅ CARTE LIVREUR — mise à jour avec les deux positions
+  mettreAJourCarteLivreur(
+    posLivreurActuel.lat, posLivreurActuel.lng,
+    posClientActuel.lat,  posClientActuel.lng
+  );
 
   // ✅ ÉTAPE 3 — UX : message adapté au % de proximité
   if (pct >= 99) {
@@ -1198,6 +1231,84 @@ function mettreAJourCarte(latLiv, lngLiv, latCli, lngCli, accLiv) {
   // Recentrer doucement pour garder les deux marqueurs visibles
   const bounds = L.latLngBounds([[latLiv,lngLiv],[latCli,lngCli]]);
   carteLeaflet.fitBounds(bounds, { padding: [50, 50], animate: true, duration: 0.8 });
+}
+
+// ── Variables carte LIVREUR (séparées de la carte client) ──
+let carteLivreurMap     = null;
+let marqueurLivreurMap  = null;
+let marqueurClientMap   = null;
+let ligneLivreurMap     = null;
+let carteLivreurInit    = false;
+
+// ================================================================
+// CARTE LIVREUR — Initialiser (appelée dès que les 2 GPS sont actifs)
+// ================================================================
+function initialiserCarteLivreur(latLiv, lngLiv, latCli, lngCli) {
+  document.getElementById('carte-livreur-loading').classList.add('hidden');
+  document.getElementById('carte-livreur').classList.remove('hidden');
+
+  const centre = [(latLiv + latCli) / 2, (lngLiv + lngCli) / 2];
+
+  carteLivreurMap = L.map('carte-livreur', {
+    center:             centre,
+    zoom:               16,
+    zoomControl:        true,
+    attributionControl: false
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(carteLivreurMap);
+
+  marqueurLivreurMap = L.marker([latLiv, lngLiv], {
+    icon: creerIcone('🛵', '#16A369'), zIndexOffset: 100
+  }).addTo(carteLivreurMap).bindPopup('🛵 Vous (Livreur)');
+
+  marqueurClientMap = L.marker([latCli, lngCli], {
+    icon: creerIcone('🏠', '#3B82F6'), zIndexOffset: 50
+  }).addTo(carteLivreurMap).bindPopup('🏠 Client');
+
+  ligneLivreurMap = L.polyline(
+    [[latLiv, lngLiv], [latCli, lngCli]],
+    { color: '#16A369', weight: 3, dashArray: '6,8', opacity: 0.7 }
+  ).addTo(carteLivreurMap);
+
+  setTimeout(() => {
+    carteLivreurMap.invalidateSize();
+    const bounds = L.latLngBounds([[latLiv, lngLiv], [latCli, lngCli]]);
+    carteLivreurMap.fitBounds(bounds, { padding: [50, 50] });
+  }, 100);
+
+  carteLivreurInit = true;
+}
+
+// ================================================================
+// CARTE LIVREUR — Mettre à jour les marqueurs
+// ================================================================
+function mettreAJourCarteLivreur(latLiv, lngLiv, latCli, lngCli) {
+  if (!carteLivreurInit) {
+    initialiserCarteLivreur(latLiv, lngLiv, latCli, lngCli);
+    return;
+  }
+  marqueurLivreurMap.setLatLng([latLiv, lngLiv]);
+  ligneLivreurMap.setLatLngs([[latLiv, lngLiv], [latCli, lngCli]]);
+
+  const bounds = L.latLngBounds([[latLiv, lngLiv], [latCli, lngCli]]);
+  carteLivreurMap.fitBounds(bounds, { padding: [50, 50], animate: true, duration: 0.8 });
+}
+
+// ================================================================
+// CARTE LIVREUR — Détruire proprement
+// ================================================================
+function detruireCarteLivreur() {
+  if (carteLivreurMap) { carteLivreurMap.remove(); carteLivreurMap = null; }
+  marqueurLivreurMap = marqueurClientMap = ligneLivreurMap = null;
+  carteLivreurInit = false;
+  const loading = document.getElementById('carte-livreur-loading');
+  const carte   = document.getElementById('carte-livreur');
+  if (loading) loading.classList.remove('hidden');
+  if (carte)   carte.classList.add('hidden');
 }
 
 function detruireCarte() {
