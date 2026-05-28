@@ -589,8 +589,8 @@ let connexionListener = null;    // listener Firebase .info/connected
 let estConnecte       = true;    // état de connexion Firebase
 
 // ── Throttle & filtre ───────────────────────────────────────────
-const FILTRE_DEPLACEMENT_LOIN_M  = 10;  // ignorer si déplacement < 5m (quand loin)
-const FILTRE_DEPLACEMENT_PROCHE_M = 8; // ignorer si déplacement < 2m (quand proche < 100m)
+const FILTRE_DEPLACEMENT_LOIN_M  = 5;  // ignorer si déplacement < 5m (quand loin)
+const FILTRE_DEPLACEMENT_PROCHE_M = 2; // ignorer si déplacement < 2m (quand proche < 100m)
 const THROTTLE_LOIN_MS     = 3000;     // throttle quand loin (> 200m)
 const THROTTLE_PROCHE_MS   = 1500;     // throttle quand proche (< 200m) → plus réactif
 const THROTTLE_TRES_PROCHE_MS = 800;   // throttle quand très proche (< 50m) → très réactif
@@ -602,21 +602,6 @@ let accuracyLivreur        = 999;      // précision GPS du livreur (mètres)
 let accuracyClient         = 999;      // précision GPS du client (mètres)
 let vitesseLivreur         = 0;        // vitesse GPS livreur en m/s
 let distTotaleFixee        = false;    // empêcher la race condition
-let maxProgression         = 0;        // % max atteint
-let historiquePosLivreur   = [];       // moyenne glissante GPS
-let historiquePosClient    = [];       // moyenne glissante GPS
-const ACCURACY_MAX_M       = 30;       // ignorer toute position GPS avec accuracy > 30m
-const NB_POS_STABLES       = 4;        // attendre 4 positions stables avant de fixer distTotale
-let compteurStablesLivreur = 0;        // nb de positions valides reçues côté livreur
-let compteurStablesClient  = 0;        // nb de positions valides reçues côté client
-
-function calculerMoyenneGPS(historique, lat, lng) {
-  historique.push({lat, lng});
-  if (historique.length > 3) historique.shift();
-  const sumLat = historique.reduce((a, p) => a + p.lat, 0);
-  const sumLng = historique.reduce((a, p) => a + p.lng, 0);
-  return { lat: sumLat / historique.length, lng: sumLng / historique.length };
-}
 
 // ── Mode transport ──────────────────────────────────────────────
 let modeTransport = 'moto';            // choix manuel : 'pied'|'velo'|'moto'
@@ -764,7 +749,6 @@ function haversine(lat1, lng1, lat2, lng2) {
 // ✅ FONCTION DE PROXIMITÉ v4 — Seuils réduits pour ne pas bloquer à 100%
 function calculerProximite(distKm, distTotaleKm) {
   const distM = distKm * 1000;
-  let pctCalcule = 1;
 
   // ── Précision GPS : capée à 15m par phone (max 30m combiné) ──
   // FIX BUG 2 : avant c'était 40m → 53m combiné → 30m réel = 100% (faux !)
@@ -775,37 +759,38 @@ function calculerProximite(distKm, distTotaleKm) {
 
   // ── RÈGLE 1 : 100% uniquement si distance GPS = 0 (impossible en pratique) ──
   // ✅ RÉALISTE : 2m → 98%, 5m → 95%, 10m → 90%, 30m → 75%
+  // Formule : pct = 100 - (distM / (precisionCombinee * 2)) * 25
+  // → à 2m  : 100 - (2/60)*25  = 100 - 0.8  = 99.2% → 99%
+  // → à 5m  : 100 - (5/60)*25  = 100 - 2.1  = 97.9% → 98%
+  // → à 10m : 100 - (10/60)*25 = 100 - 4.2  = 95.8% → 96%
+  // → à 30m : 100 - (30/60)*25 = 100 - 12.5 = 87.5% → 88%
+  // → à 60m : 100 - (60/60)*25 = 100 - 25   = 75%
   if (distM <= precisionCombinee * 2) {
     const pct = 100 - (distM / (precisionCombinee * 2)) * 25;
-    pctCalcule = Math.min(99, Math.max(75, Math.round(pct)));
-  } else if (distTotaleKm > 0.2) {
-    // ── RÈGLE 3 : Trajet long (> 200m) → ratio simple ──
+    return Math.min(99, Math.max(75, Math.round(pct)));
+  }
+
+  // ── RÈGLE 3 : Trajet long (> 200m) → ratio simple ──
+  if (distTotaleKm > 0.2) {
     const ratio = Math.max(0, Math.min(1, 1 - distKm / distTotaleKm));
     // Boost dans les 100 derniers mètres
     if (distM < 100) {
-      pctCalcule = Math.round(Math.max(ratio * 100, 80 + (100 - distM) / 100 * 19));
-    } else {
-      pctCalcule = Math.max(0, Math.min(84, Math.round(ratio * 100)));
+      return Math.round(Math.max(ratio * 100, 80 + (100 - distM) / 100 * 19));
     }
-  } else {
-    // ── RÈGLE 4 : Trajet court (< 200m) → courbe douce ──
-    if (distM <= 0) {
-      pctCalcule = 100;
-    } else if (distM <= 200) {
-      // Courbe : 0m→100%, 50m→75%, 100m→55%, 150m→38%, 200m→0%
-      const courbe = 1 - Math.pow(distM / 200, 0.55);
-      pctCalcule = Math.max(20, Math.min(84, Math.round(courbe * 100)));
-    } else if (distM <= 500) {
-      pctCalcule = Math.round(20 - (distM - 200) / 300 * 10);
-    } else if (distM <= 1000) {
-      pctCalcule = Math.round(10 - (distM - 500) / 500 * 5);
-    } else if (distM <= 5000) {
-      pctCalcule = Math.round(5  - (distM - 1000) / 4000 * 4);
-    }
+    return Math.max(0, Math.min(84, Math.round(ratio * 100)));
   }
 
-  maxProgression = Math.max(maxProgression, pctCalcule);
-  return maxProgression;
+  // ── RÈGLE 4 : Trajet court (< 200m) → courbe douce ──
+  if (distM <= 0) return 100;
+  if (distM <= 200) {
+    // Courbe : 0m→100%, 50m→75%, 100m→55%, 150m→38%, 200m→0%
+    const courbe = 1 - Math.pow(distM / 200, 0.55);
+    return Math.max(20, Math.min(84, Math.round(courbe * 100)));
+  }
+  if (distM <= 500)  return Math.round(20 - (distM - 200) / 300 * 10);
+  if (distM <= 1000) return Math.round(10 - (distM - 500) / 500 * 5);
+  if (distM <= 5000) return Math.round(5  - (distM - 1000) / 4000 * 4);
+  return 1;
 }
 
 function initiales(nom) { return nom.trim().split(/\s+/).map(n=>n[0]).join('').toUpperCase().slice(0,2); }
@@ -874,11 +859,6 @@ function nettoyerTout() {
   // Reset complet pour la prochaine livraison
   distTotale = 0;
   distTotaleFixee = false;
-  maxProgression = 0;
-  historiquePosLivreur = [];
-  historiquePosClient = [];
-  compteurStablesLivreur = 0;
-  compteurStablesClient  = 0;
   posLivreurActuel = null;
   posClientActuel = null;
   livreurRef = null;
@@ -912,7 +892,6 @@ function demarrerLivraison() {
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       const posDepart = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      historiquePosLivreur = [posDepart];
       posLivreurActuel = posDepart;
       codeActuel = genererCode();
 
@@ -958,17 +937,6 @@ function demarrerGPS() {
     const pos = snap.val();
     if (!pos) return;
 
-    // ── POINT 6 : ignorer les positions dont le timestamp a plus de 5s de retard ──
-    if (pos.timestamp && (Date.now() - pos.timestamp) > 5000) return;
-
-    // ── POINT 4 : ignorer si la précision du client dépasse 30m ──
-    if (accuracyClient > ACCURACY_MAX_M && accuracyClient !== 999) return;
-
-    // ── POINT 5 : compter les positions stables côté client ──
-    if (compteurStablesClient < NB_POS_STABLES) {
-      compteurStablesClient++;
-    }
-
     // ✅ Cache local mis à jour instantanément
     posClientActuel = pos;
 
@@ -1013,25 +981,11 @@ function demarrerGPS() {
   // ── GPS livreur en continu (avec filtre + throttle adaptatif) ──
   watchId = navigator.geolocation.watchPosition(
     (pos) => {
-      const rawAcc = pos.coords.accuracy || 20;
-      // ── POINT 4 : ignorer si précision GPS > 30m ──
-      if (rawAcc > ACCURACY_MAX_M) return;
-
-      const rawLat = pos.coords.latitude;
-      const rawLng = pos.coords.longitude;
-      const moyenne = calculerMoyenneGPS(historiquePosLivreur, rawLat, rawLng);
-      const lat = moyenne.lat;
-      const lng = moyenne.lng;
-      accuracyLivreur = rawAcc;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      accuracyLivreur = pos.coords.accuracy || 20;
       vitesseLivreur  = pos.coords.speed   || 0;   // m/s (0 si arrêté)
       posLivreurActuel = { lat, lng };
-
-      // ── POINT 5 : compter les positions stables côté livreur ──
-      if (compteurStablesLivreur < NB_POS_STABLES) {
-        compteurStablesLivreur++;
-        setGPSStatus('info', '📡 Calibration GPS… (' + compteurStablesLivreur + '/' + NB_POS_STABLES + ')');
-        return; // ne pas encore utiliser cette position pour fixer distTotale
-      }
 
       // ✅ Détection automatique mode transport selon vitesse GPS
       detecterVitesse(Math.round(vitesseLivreur * 3.6));
@@ -1077,15 +1031,6 @@ function demarrerGPS() {
         return;
       }
 
-      // ── POINT 5 : attendre 4 positions stables des deux téléphones ──
-      if (!distTotaleFixee && compteurStablesClient < NB_POS_STABLES) {
-        setGPSStatus('info', '📡 Calibration client… (' + compteurStablesClient + '/' + NB_POS_STABLES + ')');
-        livreurRef.update({ position: { lat, lng }, accuracy: accuracyLivreur, timestamp: maintenant });
-        dernierEnvoiLivreur = maintenant;
-        dernierePosEnvoyeeLivreur = { lat, lng };
-        return;
-      }
-
       // Fixer distTotale si pas encore fait
       if (!distTotaleFixee) {
         distTotaleFixee = true;
@@ -1099,7 +1044,7 @@ function demarrerGPS() {
       const pct = calculerProximite(distActuelle, distTotale);
 
       const updateData = { 
-        position:    { lat, lng, timestamp: maintenant },   // ← POINT 6 : timestamp sur la position
+        position:    { lat, lng }, 
         accuracy:    accuracyLivreur,
         vitesse:     Math.round(vitesseLivreur * 3.6),
         emoji:       emojiActuel,   // ← le client voit le bon emoji en temps réel
@@ -1278,27 +1223,16 @@ function activerGPSClient(code) {
 
   clientWatchId = navigator.geolocation.watchPosition(
     (pos) => {
-      const rawLat = pos.coords.latitude;
-      const rawLng = pos.coords.longitude;
-      const moyenne = calculerMoyenneGPS(historiquePosClient, rawLat, rawLng);
-      const lat = moyenne.lat;
-      const lng = moyenne.lng;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
       const acc = pos.coords.accuracy || 30;
       const maintenant = Date.now();
-
-      // ── POINT 4 : ignorer si précision GPS > 30m (côté client) ──
-      if (acc > ACCURACY_MAX_M) {
-        statusEl.className   = 'alert alert-warning';
-        statusEl.textContent = '⚠️ Précision GPS faible (' + Math.round(acc) + 'm) — attendez un ciel dégagé…';
-        return;
-      }
 
       // ✅ PREMIER ENVOI : toujours envoyer immédiatement, sans aucun filtre
       if (premierEnvoi) {
         premierEnvoi = false;
-        compteurStablesClient = Math.min(NB_POS_STABLES, compteurStablesClient + 1);
         db.ref('livraisons/' + code).update({
-          positionClient: { lat, lng, timestamp: maintenant },   // ← POINT 6
+          positionClient: { lat, lng },
           accuracyClient: acc
         });
         dernierEnvoiClient       = maintenant;
@@ -1320,13 +1254,14 @@ function activerGPSClient(code) {
       if (maintenant - dernierEnvoiClient < 1000) return;
 
       db.ref('livraisons/' + code).update({
-        positionClient: { lat, lng, timestamp: maintenant },   // ← POINT 6
+        positionClient: { lat, lng },
         accuracyClient: acc
       });
       dernierEnvoiClient       = maintenant;
       dernierePosEnvoyeeClient = { lat, lng };
       statusEl.className   = 'alert alert-success';
-      statusEl.textContent = '✅ GPS à jour · ±' + Math.round(acc) + 'm · ' + new Date().toLocaleTimeString();
+      statusEl.textContent = '✅ GPS à jour · ±' + Math.round(acc) + 'm · ' + new Date().toLocaleTimeString()
+        + (acc > 50 ? ' ⚠️ Précision faible — restez à l\'air libre' : '');
     },
     (err) => {
       statusEl.className   = 'alert alert-warning';
@@ -1705,9 +1640,6 @@ function detruireCarte() {
 }
 
 function majUIClient(data) {
-  // ── POINT 6 : ignorer les données Firebase si le timestamp a plus de 5s de retard ──
-  if (data.timestamp && (Date.now() - data.timestamp) > 5000) return;
-
   const pct   = data.progression || 0;
   const reste = parseFloat(data.distReste) || 0;
   const livre = data.statut === 'livre';
