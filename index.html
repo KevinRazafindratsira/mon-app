@@ -155,6 +155,24 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .row     { display: flex; align-items: center; justify-content: space-between; }
 .divider { height: 1px; background: var(--border); margin: 16px 0; }
 
+/* ── SÉLECTEUR MODE TRANSPORT ── */
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.mode-btn {
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  padding: 12px 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.18s, background 0.18s, transform 0.1s;
+  font-family: 'DM Sans', sans-serif;
+}
+.mode-btn:active { transform: scale(0.96); }
+.mode-btn .mode-emoji { font-size: 26px; display: block; margin-bottom: 4px; }
+.mode-btn .mode-label { font-size: 11px; font-weight: 600; color: var(--text-2); }
+.mode-btn.selected { border-color: var(--green); background: var(--green-light); }
+.mode-btn.selected .mode-label { color: var(--green-dark); }
+
 /* ── CARTE LEAFLET ── */
 .carte-wrap {
   border-radius: var(--radius-lg);
@@ -302,6 +320,24 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <label class="form-label">Nom du client</label>
         <input class="form-input" id="client-nom" type="text" placeholder="Ex : Rabe Mamy">
       </div>
+
+      <div class="form-group">
+        <label class="form-label">Mode de déplacement</label>
+        <div class="mode-grid">
+          <button class="mode-btn" id="mode-pied" onclick="choisirMode('pied')">
+            <span class="mode-emoji">🚶</span>
+            <span class="mode-label">À pied</span>
+          </button>
+          <button class="mode-btn" id="mode-velo" onclick="choisirMode('velo')">
+            <span class="mode-emoji">🚴</span>
+            <span class="mode-label">Vélo</span>
+          </button>
+          <button class="mode-btn selected" id="mode-moto" onclick="choisirMode('moto')">
+            <span class="mode-emoji">🛵</span>
+            <span class="mode-label">Moto</span>
+          </button>
+        </div>
+        </div>
     </div>
     <div class="alert alert-info" style="font-size:12px;">
       📡 <strong>Pas besoin d'adresse</strong><br>
@@ -565,7 +601,16 @@ let dernierePosEnvoyeeClient  = null;  // dernière pos envoyée (filtre)
 let accuracyLivreur        = 999;      // précision GPS du livreur (mètres)
 let accuracyClient         = 999;      // précision GPS du client (mètres)
 let vitesseLivreur         = 0;        // vitesse GPS livreur en m/s
-let distTotaleFixee        = false;   // empêcher la race condition
+let distTotaleFixee        = false;    // empêcher la race condition
+
+// ── Mode transport ──────────────────────────────────────────────
+let modeTransport = 'moto';            // choix manuel : 'pied'|'velo'|'moto'
+const MODES = {
+  pied: { emoji: '🚶', label: 'À pied', vitMax: 7  }, // > 7 km/h → auto-upgrade vélo
+  velo: { emoji: '🚴', label: 'Vélo',   vitMax: 30 }, // > 30 km/h → auto-upgrade moto
+  moto: { emoji: '🛵', label: 'Moto',   vitMax: 999}  // pas de limite
+};
+let emojiActuel = '🛵';                // emoji affiché (peut changer automatiquement)
 
 // ── Animation fluide marqueur livreur ──
 let animFrameId            = null;     // requestAnimationFrame ID
@@ -583,6 +628,8 @@ let marqueurLivreur    = null;   // marqueur 🛵 sur la carte
 let marqueurClient     = null;   // marqueur 🏠 sur la carte
 let ligneLivreurClient = null;   // ligne entre les deux
 let cercleAccLivreur   = null;   // cercle précision GPS livreur
+let etiquetteDistClient  = null; // étiquette distance milieu ligne (carte client)
+let etiquetteDistLivreur = null; // étiquette distance milieu ligne (carte livreur)
 let carteInitialisee   = false;  // carte créée ?
 let compteurArrivee        = 0;        // nb lectures consécutives à 99%+
 const SEUIL_ARRIVEE        = 5;        // exiger 5 lectures consécutives avant "livre"
@@ -591,6 +638,54 @@ const SEUIL_ARRIVEE        = 5;        // exiger 5 lectures consécutives avant 
 const HISTORIQUE_TAILLE = 5;          // garder les 5 dernières mesures
 let historiqueDistLivreur = [];        // distances GPS brutes livreur
 let historiqueDistClient  = [];        // distances GPS brutes client
+
+// ================================================================
+// MODE TRANSPORT — choix manuel + détection automatique vitesse
+// ================================================================
+
+function choisirMode(mode) {
+  modeTransport = mode;
+  emojiActuel   = MODES[mode].emoji;
+  // Mettre à jour les boutons visuellement
+  ['pied','velo','moto'].forEach(m => {
+    document.getElementById('mode-' + m).classList.toggle('selected', m === mode);
+  });
+  // Mettre à jour l'interface si déjà en livraison
+  mettreAJourEmoji(emojiActuel);
+}
+
+// Mettre à jour tous les endroits où l'emoji apparaît
+function mettreAJourEmoji(emoji) {
+  // Cercle proximité
+  const cercle = document.querySelector('.circle-inner');
+  if (cercle) cercle.textContent = emoji;
+  // Rider sur la barre de progression
+  const rider = document.querySelector('.progress-rider');
+  if (rider) rider.textContent = emoji;
+  // Logo header tracking
+  const logo = document.querySelector('#page-livreur-tracking .header-logo');
+  if (logo) logo.textContent = emoji;
+  // Marqueur sur les cartes (recréé au prochain update GPS)
+  emojiActuel = emoji;
+}
+
+// Détection automatique : si la vitesse dépasse le seuil du mode choisi → upgrade
+function detecterVitesse(kmh) {
+  if (!kmh || kmh < 2) return; // GPS pas fiable en dessous de 2 km/h
+  const mode = MODES[modeTransport];
+  let nouvelEmoji = mode.emoji; // défaut : respecter le choix
+  // Auto-upgrade seulement vers le haut, jamais vers le bas
+  if (modeTransport === 'pied' && kmh > mode.vitMax) {
+    nouvelEmoji = MODES.velo.emoji; // marche mais va trop vite → vélo
+  }
+  if ((modeTransport === 'pied' || modeTransport === 'velo') && kmh > MODES.velo.vitMax) {
+    nouvelEmoji = MODES.moto.emoji; // trop vite pour vélo → moto
+  }
+  if (nouvelEmoji !== emojiActuel) {
+    emojiActuel = nouvelEmoji;
+    mettreAJourEmoji(emojiActuel);
+  }
+}
 
 // ================================================================
 // NAVIGATION
@@ -789,8 +884,10 @@ function demarrerLivraison() {
   const btn = document.getElementById('btn-demarrer');
   btn.innerHTML = '📡 Activation GPS…'; btn.disabled = true;
 
-  // Reset distance pour chaque nouvelle livraison
+  // Reset distance + emoji pour chaque nouvelle livraison
   distTotale = 0; distTotaleFixee = false; posLivreurActuel = null; posClientActuel = null;
+  emojiActuel = MODES[modeTransport].emoji;
+  mettreAJourEmoji(emojiActuel);
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
@@ -890,6 +987,9 @@ function demarrerGPS() {
       vitesseLivreur  = pos.coords.speed   || 0;   // m/s (0 si arrêté)
       posLivreurActuel = { lat, lng };
 
+      // ✅ Détection automatique mode transport selon vitesse GPS
+      detecterVitesse(Math.round(vitesseLivreur * 3.6));
+
       // ✅ Mise à jour UI LOCALE instantanée (zéro latence, pas de réseau)
       if (posClientActuel && distTotaleFixee) {
         majUILivreurLocale();
@@ -946,7 +1046,8 @@ function demarrerGPS() {
       const updateData = { 
         position:    { lat, lng }, 
         accuracy:    accuracyLivreur,
-        vitesse:     Math.round(vitesseLivreur * 3.6), // km/h pour affichage
+        vitesse:     Math.round(vitesseLivreur * 3.6),
+        emoji:       emojiActuel,   // ← le client voit le bon emoji en temps réel
         progression: pct, 
         distReste:   distActuelle.toFixed(2), 
         timestamp:   maintenant 
@@ -1188,6 +1289,97 @@ function creerIcone(emoji, couleur) {
   });
 }
 
+// ================================================================
+// LIGNE INTELLIGENTE — couleur + épaisseur + étiquette distance
+// ================================================================
+
+// Couleur et épaisseur selon la distance
+function styleLigne(distKm) {
+  const m = distKm * 1000;
+  if (m > 500)  return { color: '#EF4444', weight: 6, dash: 'none' };   // rouge — loin
+  if (m > 200)  return { color: '#F59E0B', weight: 5, dash: 'none' };   // orange
+  if (m > 50)   return { color: '#F59E0B', weight: 4, dash: '8,6' };    // orange pointillé
+  if (m > 20)   return { color: '#16A369', weight: 3, dash: '6,5' };    // vert
+  return              { color: '#16A369', weight: 2, dash: '4,4' };     // vert fin — très proche
+}
+
+// Texte de distance formaté
+function texteDistance(distKm) {
+  const m = Math.round(distKm * 1000);
+  if (m >= 1000) return (distKm).toFixed(1) + ' km';
+  if (m >= 100)  return Math.round(m / 10) * 10 + ' m';
+  return m + ' m';
+}
+
+// Créer l'icône HTML de l'étiquette (badge au milieu de la ligne)
+function iconeEtiquette(distKm) {
+  const m = distKm * 1000;
+  const color  = m > 500  ? '#EF4444'
+               : m > 200  ? '#F59E0B'
+               : m > 50   ? '#F59E0B'
+               : '#16A369';
+  const bg     = m > 500  ? '#FEE2E2'
+               : m > 200  ? '#FEF3C7'
+               : m > 50   ? '#FEF3C7'
+               : '#EDFAF3';
+  const texte  = texteDistance(distKm);
+  const emoji  = m > 500 ? '📍' : m > 100 ? '🛵' : '✅';
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      background:${bg};
+      color:${color};
+      border:2px solid ${color};
+      border-radius:20px;
+      padding:4px 10px;
+      font-size:12px;
+      font-weight:700;
+      white-space:nowrap;
+      box-shadow:0 2px 6px rgba(0,0,0,0.18);
+      font-family:sans-serif;
+      display:flex;gap:4px;align-items:center;
+    ">${emoji} ${texte}</div>`,
+    iconSize:   [90, 28],
+    iconAnchor: [45, 14]
+  });
+}
+
+// Point milieu GPS entre deux positions
+function milieu(lat1, lng1, lat2, lng2) {
+  return [(lat1 + lat2) / 2, (lng1 + lng2) / 2];
+}
+
+// Mettre à jour la ligne + étiquette sur UNE carte donnée
+function majLigneEtiquette(carte, ligne, etiquette, latLiv, lngLiv, latCli, lngCli, distKm) {
+  if (!carte || !ligne) return etiquette;
+
+  const style = styleLigne(distKm);
+
+  // Mettre à jour couleur + épaisseur de la ligne
+  ligne.setLatLngs([[latLiv, lngLiv], [latCli, lngCli]]);
+  ligne.setStyle({
+    color:     style.color,
+    weight:    style.weight,
+    dashArray: style.dash === 'none' ? null : style.dash
+  });
+
+  // Calculer le point milieu
+  const mid = milieu(latLiv, lngLiv, latCli, lngCli);
+
+  // Créer ou déplacer l'étiquette
+  if (!etiquette) {
+    etiquette = L.marker(mid, {
+      icon:            iconeEtiquette(distKm),
+      interactive:     false,
+      zIndexOffset:    200
+    }).addTo(carte);
+  } else {
+    etiquette.setLatLng(mid);
+    etiquette.setIcon(iconeEtiquette(distKm));
+  }
+  return etiquette;
+}
+
 function initialiserCarte(latLiv, lngLiv, latCli, lngCli) {
   // Afficher la carte, cacher le loading
   document.getElementById('carte-loading').classList.add('hidden');
@@ -1218,8 +1410,15 @@ function initialiserCarte(latLiv, lngLiv, latCli, lngCli) {
 
   ligneLivreurClient = L.polyline(
     [[latLiv, lngLiv], [latCli, lngCli]],
-    { color: '#16A369', weight: 3, dashArray: '6,8', opacity: 0.7 }
+    { color: '#EF4444', weight: 6, opacity: 0.85 }
   ).addTo(carteLeaflet);
+
+  // Étiquette distance initiale au milieu de la ligne
+  const distInit = haversine(latLiv, lngLiv, latCli, lngCli);
+  const mid = milieu(latLiv, lngLiv, latCli, lngCli);
+  etiquetteDistClient = L.marker(mid, {
+    icon: iconeEtiquette(distInit), interactive: false, zIndexOffset: 200
+  }).addTo(carteLeaflet);
 
   // ✅ FIX : invalider la taille APRÈS que le div est visible
   // Sans ça, Leaflet ne calcule pas les dimensions → carte vide
@@ -1238,28 +1437,29 @@ function mettreAJourCarte(latLiv, lngLiv, latCli, lngCli, accLiv) {
     return;
   }
 
-  // ✅ Animation fluide du marqueur livreur sur la carte client
+  // Animation fluide du marqueur livreur
   animerMarqueurClient(latLiv, lngLiv);
 
-  // Mettre à jour la ligne
-  ligneLivreurClient.setLatLngs([[latLiv,lngLiv],[latCli,lngCli]]);
+  // ✅ Ligne intelligente + étiquette distance au milieu
+  const distKm = haversine(latLiv, lngLiv, latCli, lngCli);
+  etiquetteDistClient = majLigneEtiquette(
+    carteLeaflet, ligneLivreurClient, etiquetteDistClient,
+    latLiv, lngLiv, latCli, lngCli, distKm
+  );
 
-  // Cercle de précision GPS livreur (optionnel, léger)
+  // Cercle de précision GPS livreur
   if (accLiv && accLiv < 100) {
     if (cercleAccLivreur) {
       cercleAccLivreur.setLatLng([latLiv, lngLiv]).setRadius(accLiv);
     } else {
       cercleAccLivreur = L.circle([latLiv, lngLiv], {
-        radius:      accLiv,
-        color:       '#16A369',
-        fillColor:   '#16A369',
-        fillOpacity: 0.08,
-        weight:      1
+        radius: accLiv, color: '#16A369', fillColor: '#16A369',
+        fillOpacity: 0.08, weight: 1
       }).addTo(carteLeaflet);
     }
   }
 
-  // Recentrer doucement pour garder les deux marqueurs visibles
+  // Recentrer pour garder les deux marqueurs visibles
   const bounds = L.latLngBounds([[latLiv,lngLiv],[latCli,lngCli]]);
   carteLeaflet.fitBounds(bounds, { padding: [50, 50], animate: true, duration: 0.8 });
 }
@@ -1302,8 +1502,15 @@ function initialiserCarteLivreur(latLiv, lngLiv, latCli, lngCli) {
 
   ligneLivreurMap = L.polyline(
     [[latLiv, lngLiv], [latCli, lngCli]],
-    { color: '#16A369', weight: 3, dashArray: '6,8', opacity: 0.7 }
+    { color: '#EF4444', weight: 6, opacity: 0.85 }
   ).addTo(carteLivreurMap);
+
+  // Étiquette distance initiale
+  const distInitLiv = haversine(latLiv, lngLiv, latCli, lngCli);
+  const midLiv = milieu(latLiv, lngLiv, latCli, lngCli);
+  etiquetteDistLivreur = L.marker(midLiv, {
+    icon: iconeEtiquette(distInitLiv), interactive: false, zIndexOffset: 200
+  }).addTo(carteLivreurMap);
 
   setTimeout(() => {
     carteLivreurMap.invalidateSize();
@@ -1322,9 +1529,16 @@ function mettreAJourCarteLivreur(latLiv, lngLiv, latCli, lngCli) {
     initialiserCarteLivreur(latLiv, lngLiv, latCli, lngCli);
     return;
   }
-  // ✅ Animation fluide au lieu de téléportation
+
+  // Animation fluide marqueur livreur
   animerMarqueurLivreur(latLiv, lngLiv);
-  ligneLivreurMap.setLatLngs([[latLiv, lngLiv], [latCli, lngCli]]);
+
+  // ✅ Ligne intelligente + étiquette distance au milieu
+  const distKm = haversine(latLiv, lngLiv, latCli, lngCli);
+  etiquetteDistLivreur = majLigneEtiquette(
+    carteLivreurMap, ligneLivreurMap, etiquetteDistLivreur,
+    latLiv, lngLiv, latCli, lngCli, distKm
+  );
 
   const bounds = L.latLngBounds([[latLiv, lngLiv], [latCli, lngCli]]);
   carteLivreurMap.fitBounds(bounds, { padding: [50, 50], animate: true, duration: 0.8 });
@@ -1409,7 +1623,7 @@ function detruireCarteLivreur() {
   if (animFrameId)       { cancelAnimationFrame(animFrameId);       animFrameId = null; }
   if (animFrameClientId) { cancelAnimationFrame(animFrameClientId); animFrameClientId = null; }
   if (carteLivreurMap) { carteLivreurMap.remove(); carteLivreurMap = null; }
-  marqueurLivreurMap = marqueurClientMap = ligneLivreurMap = null;
+  marqueurLivreurMap = marqueurClientMap = ligneLivreurMap = etiquetteDistLivreur = null;
   carteLivreurInit = false;
   const loading = document.getElementById('carte-livreur-loading');
   const carte   = document.getElementById('carte-livreur');
@@ -1419,7 +1633,7 @@ function detruireCarteLivreur() {
 
 function detruireCarte() {
   if (carteLeaflet) { carteLeaflet.remove(); carteLeaflet = null; }
-  marqueurLivreur = marqueurClient = ligneLivreurClient = cercleAccLivreur = null;
+  marqueurLivreur = marqueurClient = ligneLivreurClient = cercleAccLivreur = etiquetteDistClient = null;
   carteInitialisee = false;
   document.getElementById('carte-loading').classList.remove('hidden');
   document.getElementById('carte-client').classList.add('hidden');
@@ -1429,6 +1643,14 @@ function majUIClient(data) {
   const pct   = data.progression || 0;
   const reste = parseFloat(data.distReste) || 0;
   const livre = data.statut === 'livre';
+
+  // ✅ Emoji livreur reçu depuis Firebase → affiché chez le client
+  const emoji = data.emoji || '🛵';
+  const subEl = document.querySelector('#livreur-info-card .livreur-sub');
+  if (subEl) subEl.textContent = emoji + ' est en route vers vous 🏠';
+  // Rider barre progression côté client
+  const riderClient = document.querySelector('#client-fill .progress-rider');
+  if (riderClient) riderClient.textContent = emoji;
 
   // ✅ ÉTAPE 1 — Distance corrigée + lissée côté client
   const distAffichee = formaterDistance(reste, historiqueDistClient);
