@@ -1141,14 +1141,16 @@ function activerGPSClient(code) {
         return;
       }
 
-      // ── Envois suivants : filtre déplacement (min 3m) ──
+      // ── Envois suivants : filtre déplacement (min 1m) ──
+      // ⚠️ 3m était trop élevé : jitter GPS ±20m fait que le phone "bouge"
+      // de 1-2m par callback même si le vrai déplacement est 10m → tout bloqué
       if (dernierePosEnvoyeeClient) {
         const deplacementM = haversine(lat, lng, dernierePosEnvoyeeClient.lat, dernierePosEnvoyeeClient.lng) * 1000;
-        if (deplacementM < 3) return; // ignorer si moins de 3m de mouvement
+        if (deplacementM < 1) return; // ignorer seulement si < 1m (jitter pur)
       }
 
-      // ── Throttle : max 1 envoi par 2 secondes ──
-      if (maintenant - dernierEnvoiClient < 2000) return;
+      // ── Throttle : max 1 envoi par 1 seconde (était 2s — trop lent à 10m) ──
+      if (maintenant - dernierEnvoiClient < 1000) return;
 
       db.ref('livraisons/' + code).update({
         positionClient: { lat, lng },
@@ -1157,14 +1159,15 @@ function activerGPSClient(code) {
       dernierEnvoiClient       = maintenant;
       dernierePosEnvoyeeClient = { lat, lng };
       statusEl.className   = 'alert alert-success';
-      statusEl.textContent = '✅ GPS à jour · ±' + Math.round(acc) + 'm · ' + new Date().toLocaleTimeString();
+      statusEl.textContent = '✅ GPS à jour · ±' + Math.round(acc) + 'm · ' + new Date().toLocaleTimeString()
+        + (acc > 50 ? ' ⚠️ Précision faible — restez à l\'air libre' : '');
     },
     (err) => {
       statusEl.className   = 'alert alert-warning';
       statusEl.textContent = '⚠️ GPS refusé. Allez dans paramètres navigateur → Autoriser localisation.';
       premierEnvoi = false;
     },
-    { enableHighAccuracy: true, maximumAge: 500, timeout: 20000 }
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
   );
 }
 
@@ -1354,11 +1357,17 @@ function animerMarqueurLivreur(latCible, lngCible) {
   const lngDepart   = posActuelle.lng;
   const debut       = performance.now();
 
-  // Adapter la durée à la vitesse : rapide → animation plus courte
-  // pour que le marqueur reste "en phase" avec la réalité
-  const duree = vitesseLivreur > 16 ? 500   // > 58 km/h → 0.5s
-              : vitesseLivreur > 8  ? 700   // > 29 km/h → 0.7s
-              : DUREE_ANIM_MS;             // lent/arrêté → 0.9s
+  // Durée animation adaptée à la vitesse ET à la distance
+  // À 10m, on veut réactivité max → 400ms
+  const distClient = posClientActuel ? haversine(
+    posLivreurActuel ? posLivreurActuel.lat : latCible,
+    posLivreurActuel ? posLivreurActuel.lng : lngCible,
+    posClientActuel.lat, posClientActuel.lng) * 1000 : 999;
+  const duree = distClient < 20  ? 350              // < 20m   → 0.35s ultra réactif
+              : distClient < 50  ? 450              // < 50m   → 0.45s
+              : vitesseLivreur > 16 ? 500           // > 58km/h → 0.5s
+              : vitesseLivreur > 8  ? 700           // > 29km/h → 0.7s
+              : DUREE_ANIM_MS;                      // lent → 0.9s
 
   function frame(maintenant) {
     const t = Math.min(1, (maintenant - debut) / duree);
